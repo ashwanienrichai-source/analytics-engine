@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
 # ---------------------------------------------------------
-# ADMIN EMAIL FOR DOWNLOAD ACCESS
+# ADMIN EMAIL (ALLOWED TO DOWNLOAD)
 # ---------------------------------------------------------
 
 ADMIN_EMAIL = "ashwanivatsalarya@gmail.com"
@@ -32,6 +32,7 @@ if user_email:
 
 if "result" not in st.session_state:
     st.session_state.result = None
+
 
 # ---------------------------------------------------------
 # SIDEBAR MODULES
@@ -66,6 +67,7 @@ if module != "Cohort Analytics":
 
     st.stop()
 
+
 # ---------------------------------------------------------
 # FILE LOADER
 # ---------------------------------------------------------
@@ -87,6 +89,7 @@ def load_file(uploaded_file):
     df.columns = df.columns.str.strip()
 
     return df
+
 
 # ---------------------------------------------------------
 # COHORT ENGINE
@@ -160,6 +163,7 @@ st.title("Cohort Analytics Engine")
 
 left, right = st.columns([1,1.7])
 
+
 # ---------------------------------------------------------
 # LEFT CONFIGURATION PANEL
 # ---------------------------------------------------------
@@ -210,6 +214,10 @@ with left:
             ["None"] + columns
         )
 
+        # -----------------------------------------
+        # FISCAL FILTER
+        # -----------------------------------------
+
         if fiscal_col != "None":
 
             fy_vals = sorted(df[fiscal_col].dropna().unique())
@@ -228,6 +236,11 @@ with left:
 
                 fy = st.selectbox("Fiscal Year", fy_vals)
                 df = df[df[fiscal_col] == fy]
+
+
+        # -----------------------------------------
+        # COHORT SETTINGS
+        # -----------------------------------------
 
         st.markdown("### Individual Cohorts")
 
@@ -298,12 +311,49 @@ with left:
                         how="left"
                     )
 
+            for group in hierarchies:
+
+                name = "_".join(group)
+
+                if sg:
+
+                    sg_temp = cohort_engine(df, metric, group, "SG")
+
+                    result = result.merge(
+                        sg_temp[group+[f"SG_{name}"]],
+                        on=group,
+                        how="left"
+                    )
+
+                if pc:
+
+                    pc_temp = cohort_engine(df, metric, group, "PC")
+
+                    result = result.merge(
+                        pc_temp[group+[f"PC_{name}"]],
+                        on=group,
+                        how="left"
+                    )
+
+                if rc:
+
+                    rc_temp = cohort_engine(df, metric, group, "RC")
+
+                    result = result.merge(
+                        rc_temp[group+[f"RC_{name}"]],
+                        on=group,
+                        how="left"
+                    )
+
             st.session_state.result = result
             st.session_state.df = df
             st.session_state.metric = metric
             st.session_state.customer_col = customer_col
             st.session_state.date_col = date_col
+            st.session_state.geo_col = geo_col
+            st.session_state.product_col = product_col
             st.session_state.fiscal_col = fiscal_col
+
 
 # ---------------------------------------------------------
 # RIGHT ANALYTICS PANEL
@@ -316,11 +366,18 @@ with right:
         df = st.session_state.df
         metric = st.session_state.metric
         result = st.session_state.result
+
         customer_col = st.session_state.customer_col
         date_col = st.session_state.date_col
         fiscal_col = st.session_state.fiscal_col
 
-        tabs = st.tabs(["Summary","Cohort Analytics","Output"])
+
+        tabs = st.tabs([
+            "Summary",
+            "Cohort Analytics",
+            "Output"
+        ])
+
 
 # ---------------------------------------------------------
 # SUMMARY
@@ -364,43 +421,6 @@ with right:
 
                 st.plotly_chart(fig,use_container_width=True)
 
-# ---------------------------------------------------------
-# COHORT ANALYTICS
-# ---------------------------------------------------------
-
-        with tabs[1]:
-
-            if customer_col!="None" and date_col!="None":
-
-                df[date_col] = pd.to_datetime(df[date_col])
-
-                df["OrderMonth"] = df[date_col].dt.to_period("M").astype(str)
-
-                cohort = df.groupby(customer_col)["OrderMonth"].min()
-
-                df["CohortMonth"] = df[customer_col].map(cohort)
-
-                df["CohortIndex"] = (
-                    pd.to_datetime(df["OrderMonth"]) -
-                    pd.to_datetime(df["CohortMonth"])
-                ).dt.days // 30
-
-                pivot = pd.pivot_table(
-                    df,
-                    values=customer_col,
-                    index="CohortMonth",
-                    columns="CohortIndex",
-                    aggfunc="nunique"
-                ).fillna(0)
-
-                fig = px.imshow(
-                    pivot,
-                    text_auto=True,
-                    color_continuous_scale="Blues",
-                    title="Cohort Heatmap"
-                )
-
-                st.plotly_chart(fig,use_container_width=True)
 
 # ---------------------------------------------------------
 # OUTPUT
