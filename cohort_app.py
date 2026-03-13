@@ -64,9 +64,8 @@ def signup():
 
             st.success("Account created. Please login.")
 
-        except Exception as e:
+        except:
             st.error("Signup failed")
-
 
 # -------------------------
 # LOGIN
@@ -106,12 +105,10 @@ def login():
                 st.rerun()
 
             else:
-
                 st.error("Invalid login")
 
-        except Exception as e:
+        except:
             st.error("Login failed")
-
 
 # -------------------------
 # AUTH PAGE
@@ -130,7 +127,6 @@ def auth_page():
         login()
     else:
         signup()
-
 
 # -------------------------
 # PAYMENT LOCK
@@ -166,35 +162,62 @@ def payment_gate():
         except:
             st.error("Payment submission failed")
 
-
 # -------------------------
-# FILE LOADER
+# FILE LOADER (FIXED)
 # -------------------------
 
 def load_file(uploaded_file):
 
     try:
 
-        if uploaded_file.name.endswith(".csv"):
+        uploaded_file.seek(0)
+
+        if uploaded_file.name.lower().endswith(".csv"):
 
             try:
-                df = pd.read_csv(uploaded_file, encoding="utf-8", header=0)
+
+                df = pd.read_csv(
+                    uploaded_file,
+                    encoding="utf-8",
+                    header=0,
+                    engine="python"
+                )
+
             except:
-                df = pd.read_csv(uploaded_file, encoding="latin1", header=0)
 
-        elif uploaded_file.name.endswith(".xlsx"):
+                uploaded_file.seek(0)
 
-            df = pd.read_excel(uploaded_file)
+                df = pd.read_csv(
+                    uploaded_file,
+                    encoding="latin1",
+                    header=0,
+                    engine="python"
+                )
 
-        df.columns = df.columns.str.strip()
+        elif uploaded_file.name.lower().endswith(".xlsx"):
+
+            uploaded_file.seek(0)
+            df = pd.read_excel(uploaded_file, header=0)
+
+        else:
+
+            st.error("Unsupported file format")
+            return None
+
+        df.columns = (
+            df.columns
+            .astype(str)
+            .str.strip()
+            .str.replace("\n", " ")
+        )
 
         return df
 
-    except:
+    except Exception as e:
 
         st.error("File could not be read")
+        st.write(e)
         return None
-
 
 # -------------------------
 # COHORT ENGINE
@@ -218,7 +241,10 @@ def cohort_engine():
 
         st.success("File Loaded Successfully")
 
-        st.dataframe(df.head())
+        st.write("Detected Columns:")
+        st.write(list(df.columns))
+
+        st.dataframe(df.head(10))
 
         columns = df.columns.tolist()
 
@@ -382,23 +408,6 @@ def cohort_engine():
             col2.metric("Cohort Columns", len(cohort_cols))
             col3.metric("Metric Total", round(df[metric].sum(), 2))
 
-            if individual_cols:
-
-                chart_df = (
-                    df.groupby(individual_cols[0])[metric]
-                    .sum()
-                    .reset_index()
-                    .sort_values(metric, ascending=False)
-                )
-
-                fig = px.bar(
-                    chart_df.head(10),
-                    x=individual_cols[0],
-                    y=metric
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
             st.dataframe(result)
 
             csv = result.to_csv(index=False)
@@ -414,7 +423,6 @@ def cohort_engine():
             else:
 
                 payment_gate()
-
 
 # -------------------------
 # MAIN ROUTER
