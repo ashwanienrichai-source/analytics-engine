@@ -2,12 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from supabase import create_client
 from datetime import datetime
+from supabase import create_client
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# ---------------- SUPABASE ---------------- #
+# -------------------------
+# SUPABASE CONFIG
+# -------------------------
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -15,7 +17,9 @@ UPI_ID = st.secrets["UPI_ID"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ---------------- SESSION ---------------- #
+# -------------------------
+# SESSION STATE
+# -------------------------
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -26,7 +30,10 @@ if "user_email" not in st.session_state:
 if "premium" not in st.session_state:
     st.session_state.premium = False
 
-# ---------------- SIGNUP ---------------- #
+
+# -------------------------
+# SIGNUP
+# -------------------------
 
 def signup():
 
@@ -46,7 +53,10 @@ def signup():
 
         st.success("Account created. Please login.")
 
-# ---------------- LOGIN ---------------- #
+
+# -------------------------
+# LOGIN
+# -------------------------
 
 def login():
 
@@ -80,7 +90,10 @@ def login():
 
             st.error("Invalid login")
 
-# ---------------- AUTH PAGE ---------------- #
+
+# -------------------------
+# AUTH PAGE
+# -------------------------
 
 def auth_page():
 
@@ -96,7 +109,10 @@ def auth_page():
     else:
         signup()
 
-# ---------------- PAYMENT ---------------- #
+
+# -------------------------
+# PAYMENT LOCK
+# -------------------------
 
 def payment_gate():
 
@@ -119,7 +135,32 @@ def payment_gate():
 
         st.success("Payment submitted. Waiting verification.")
 
-# ---------------- COHORT ENGINE ---------------- #
+
+# -------------------------
+# FILE LOADER
+# -------------------------
+
+def load_file(uploaded_file):
+
+    if uploaded_file.name.endswith(".csv"):
+
+        try:
+            df = pd.read_csv(uploaded_file, header=0, encoding="utf-8")
+        except:
+            df = pd.read_csv(uploaded_file, header=0, encoding="latin1")
+
+    elif uploaded_file.name.endswith(".xlsx"):
+
+        df = pd.read_excel(uploaded_file)
+
+    df.columns = df.columns.str.strip()
+
+    return df
+
+
+# -------------------------
+# COHORT ENGINE
+# -------------------------
 
 def cohort_engine():
 
@@ -132,10 +173,11 @@ def cohort_engine():
 
     if uploaded_file:
 
-        try:
-            df = pd.read_csv(uploaded_file, encoding="utf-8")
-        except:
-            df = pd.read_csv(uploaded_file, encoding="latin1")
+        df = load_file(uploaded_file)
+
+        st.success("File Loaded Successfully")
+
+        st.dataframe(df.head())
 
         columns = df.columns.tolist()
 
@@ -311,22 +353,22 @@ def cohort_engine():
             col2.metric("Cohort Columns", len(cohort_cols))
             col3.metric("Metric Total", round(df[metric].sum(), 2))
 
-            st.subheader("Top Contributors")
+            if individual_cols:
 
-            chart_df = (
-                df.groupby(individual_cols[0])[metric]
-                .sum()
-                .reset_index()
-                .sort_values(metric, ascending=False)
-            )
+                chart_df = (
+                    df.groupby(individual_cols[0])[metric]
+                    .sum()
+                    .reset_index()
+                    .sort_values(metric, ascending=False)
+                )
 
-            fig = px.bar(
-                chart_df.head(10),
-                x=individual_cols[0],
-                y=metric
-            )
+                fig = px.bar(
+                    chart_df.head(10),
+                    x=individual_cols[0],
+                    y=metric
+                )
 
-            st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
 
             st.dataframe(result)
 
@@ -344,7 +386,10 @@ def cohort_engine():
 
                 payment_gate()
 
-# ---------------- MAIN ROUTER ---------------- #
+
+# -------------------------
+# MAIN ROUTER
+# -------------------------
 
 if not st.session_state.logged_in:
 
