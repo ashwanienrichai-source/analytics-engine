@@ -5,16 +5,17 @@ import plotly.express as px
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# ----------------------------------------------------
+# ------------------------------------------------
 # SESSION
-# ----------------------------------------------------
+# ------------------------------------------------
 
 if "result" not in st.session_state:
     st.session_state.result = None
 
-# ----------------------------------------------------
+
+# ------------------------------------------------
 # SIDEBAR MODULES
-# ----------------------------------------------------
+# ------------------------------------------------
 
 st.sidebar.title("Analytics Modules")
 
@@ -45,9 +46,10 @@ if module != "Cohort Analytics":
 
     st.stop()
 
-# ----------------------------------------------------
+
+# ------------------------------------------------
 # FILE LOADER
-# ----------------------------------------------------
+# ------------------------------------------------
 
 def load_file(uploaded_file):
 
@@ -61,7 +63,6 @@ def load_file(uploaded_file):
             df = pd.read_csv(uploaded_file, header=0, encoding="latin1")
 
     else:
-
         df = pd.read_excel(uploaded_file)
 
     df.columns = df.columns.str.strip()
@@ -69,9 +70,9 @@ def load_file(uploaded_file):
     return df
 
 
-# ----------------------------------------------------
+# ------------------------------------------------
 # COHORT ENGINE
-# ----------------------------------------------------
+# ------------------------------------------------
 
 def cohort_engine(df, metric, individual_cols, hierarchies, rank_flag, pct_flag, rev_flag):
 
@@ -176,17 +177,18 @@ def cohort_engine(df, metric, individual_cols, hierarchies, rank_flag, pct_flag,
     return result
 
 
-# ----------------------------------------------------
+# ------------------------------------------------
 # MAIN PAGE
-# ----------------------------------------------------
+# ------------------------------------------------
 
 st.title("Cohort Analytics Engine")
 
 left, right = st.columns([1,1.6])
 
-# ----------------------------------------------------
-# LEFT CONFIG PANEL
-# ----------------------------------------------------
+
+# ------------------------------------------------
+# LEFT PANEL
+# ------------------------------------------------
 
 with left:
 
@@ -299,9 +301,9 @@ with left:
             st.session_state.product_col = product_col
 
 
-# ----------------------------------------------------
-# RIGHT ANALYTICS PANEL
-# ----------------------------------------------------
+# ------------------------------------------------
+# RIGHT PANEL
+# ------------------------------------------------
 
 with right:
 
@@ -322,12 +324,11 @@ with right:
             "Concentration",
             "Segmentation",
             "Cohort Heatmap",
+            "Retention %",
             "Output"
         ])
 
-        # ---------------------------
-        # SUMMARY
-        # ---------------------------
+        # ---------------- SUMMARY ----------------
 
         with tabs[0]:
 
@@ -351,9 +352,7 @@ with right:
             c3.metric("Revenue / Customer", round(rev_per_customer,2) if rev_per_customer else None)
 
 
-        # ---------------------------
-        # REVENUE CHARTS
-        # ---------------------------
+        # ---------------- REVENUE ----------------
 
         with tabs[1]:
 
@@ -394,9 +393,7 @@ with right:
                 st.plotly_chart(fig, use_container_width=True)
 
 
-        # ---------------------------
-        # REVENUE CONCENTRATION
-        # ---------------------------
+        # ---------------- CONCENTRATION ----------------
 
         with tabs[2]:
 
@@ -421,9 +418,7 @@ with right:
                 st.plotly_chart(fig, use_container_width=True)
 
 
-        # ---------------------------
-        # CUSTOMER SEGMENTATION
-        # ---------------------------
+        # ---------------- SEGMENTATION ----------------
 
         with tabs[3]:
 
@@ -466,24 +461,22 @@ with right:
                 st.plotly_chart(fig)
 
 
-        # ---------------------------
-        # COHORT HEATMAP
-        # ---------------------------
+        # ---------------- COHORT HEATMAP ----------------
 
         with tabs[4]:
 
             if customer_col != "None" and date_col != "None":
 
-                df["OrderMonth"] = df[date_col].dt.to_period("M")
+                df["OrderMonth"] = df[date_col].dt.to_period("M").astype(str)
 
                 cohort = df.groupby(customer_col)["OrderMonth"].min()
 
                 df["CohortMonth"] = df[customer_col].map(cohort)
 
                 df["CohortIndex"] = (
-                    (df["OrderMonth"] - df["CohortMonth"])
-                    .apply(lambda x: x.n)
-                )
+                    pd.to_datetime(df["OrderMonth"]) -
+                    pd.to_datetime(df["CohortMonth"])
+                ).dt.days // 30
 
                 pivot = pd.pivot_table(
                     df,
@@ -491,18 +484,40 @@ with right:
                     index="CohortMonth",
                     columns="CohortIndex",
                     aggfunc="nunique"
-                )
+                ).fillna(0)
 
-                fig = px.imshow(pivot)
+                fig = px.imshow(
+                    pivot,
+                    aspect="auto",
+                    color_continuous_scale="Blues"
+                )
 
                 st.plotly_chart(fig, use_container_width=True)
 
 
-        # ---------------------------
-        # OUTPUT
-        # ---------------------------
+        # ---------------- RETENTION % ----------------
 
         with tabs[5]:
+
+            if customer_col != "None" and date_col != "None":
+
+                retention = pivot.divide(
+                    pivot.iloc[:,0],
+                    axis=0
+                )
+
+                fig = px.imshow(
+                    retention,
+                    aspect="auto",
+                    color_continuous_scale="Greens"
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+
+        # ---------------- OUTPUT ----------------
+
+        with tabs[6]:
 
             st.dataframe(result)
 
