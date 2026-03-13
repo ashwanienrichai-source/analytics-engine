@@ -1,17 +1,16 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timedelta
 from supabase import create_client
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# ---------------- SUPABASE ---------------- #
+# ---------------- CONFIG ---------------- #
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-UPI_ID = st.secrets["UPI_ID"]
-ADMIN_EMAIL = st.secrets["ADMIN_EMAIL"]
+ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -49,10 +48,18 @@ def signup():
                 st.warning("User already exists")
                 return
 
+            premium = False
+            expiry = None
+
+            if email == ADMIN_EMAIL:
+                premium = True
+                expiry = (datetime.now() + timedelta(days=365)).isoformat()
+
             supabase.table("users").insert({
                 "email": email,
                 "password": password,
-                "premium": False,
+                "premium": premium,
+                "premium_expiry": expiry,
                 "created_at": datetime.now().isoformat()
             }).execute()
 
@@ -84,7 +91,17 @@ def login():
 
                 st.session_state.logged_in = True
                 st.session_state.user_email = email
-                st.session_state.premium = user.data[0]["premium"]
+
+                premium = user.data[0]["premium"]
+                expiry = user.data[0].get("premium_expiry")
+
+                if premium and expiry:
+
+                    if datetime.fromisoformat(expiry) > datetime.now():
+                        st.session_state.premium = True
+
+                if email == ADMIN_EMAIL:
+                    st.session_state.premium = True
 
                 try:
                     supabase.table("login_logs").insert({
@@ -102,11 +119,38 @@ def login():
         except:
             st.error("Login failed")
 
-# ---------------- AUTH PAGE ---------------- #
+# ---------------- LOGIN PAGE ---------------- #
 
 def auth_page():
 
     st.title("Analytics Engine")
+
+    st.markdown("## Premium Analytics Subscription")
+
+    st.write("**$25 per year**")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.markdown("### Free User")
+
+        st.write("""
+- Run analytics
+- View results
+- Cannot download outputs
+""")
+
+    with col2:
+
+        st.markdown("### Premium User")
+
+        st.write("""
+- Run analytics
+- Download results
+- Full analytics access
+- Priority updates
+""")
 
     option = st.radio("Select Option", ["Login", "Signup"])
 
@@ -115,83 +159,59 @@ def auth_page():
     else:
         signup()
 
-# ---------------- PAYMENT GATE ---------------- #
+# ---------------- SUBSCRIPTION PAGE ---------------- #
 
-def payment_gate(result_df):
+def subscription_page():
 
-    st.warning("Premium subscription required to download output")
+    st.title("Premium Subscription")
 
-    st.write("Pay **$25 via UPI**")
+    st.write("Upgrade to **Premium Analytics**")
 
-    st.code(UPI_ID)
+    st.write("Price: **$25 / year**")
 
-    txn = st.text_input("Enter UPI Transaction ID")
+    if st.button("Activate Premium"):
 
-    if txn:
-
-        if len(txn) < 10:
-
-            st.error("Transaction ID must be at least 10 characters")
-
-            return
+        expiry = (datetime.now() + timedelta(days=365)).isoformat()
 
         try:
 
-            supabase.table("payments").insert({
-                "email": st.session_state.user_email,
-                "upi_txn": txn,
-                "amount": 25,
-                "verified": False,
-                "created_at": datetime.now().isoformat()
-            }).execute()
+            supabase.table("users")\
+                .update({
+                    "premium": True,
+                    "premium_expiry": expiry
+                })\
+                .eq("email", st.session_state.user_email)\
+                .execute()
+
+            st.session_state.premium = True
+
+            st.success("Premium activated for 1 year")
 
         except:
-            pass
-
-        st.success("Transaction recorded")
-
-        csv = result_df.to_csv(index=False)
-
-        st.download_button(
-            "Download Output",
-            csv,
-            "cohort_output.csv"
-        )
+            st.error("Subscription update failed")
 
 # ---------------- FILE LOADER ---------------- #
 
 def load_file(uploaded_file):
 
-    try:
+    uploaded_file.seek(0)
+
+    if uploaded_file.name.endswith(".csv"):
+
+        try:
+            df = pd.read_csv(uploaded_file, encoding="utf-8", header=0)
+        except:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, encoding="latin1", header=0)
+
+    else:
 
         uploaded_file.seek(0)
+        df = pd.read_excel(uploaded_file, header=0)
 
-        if uploaded_file.name.lower().endswith(".csv"):
+    df.columns = df.columns.str.strip()
 
-            try:
-                df = pd.read_csv(uploaded_file, encoding="utf-8", header=0)
-            except:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, encoding="latin1", header=0)
-
-        elif uploaded_file.name.lower().endswith(".xlsx"):
-
-            uploaded_file.seek(0)
-            df = pd.read_excel(uploaded_file, header=0)
-
-        else:
-
-            st.error("Unsupported file format")
-            return None
-
-        df.columns = df.columns.str.strip()
-
-        return df
-
-    except:
-
-        st.error("File could not be read")
-        return None
+    return df
 
 # ---------------- COHORT ENGINE ---------------- #
 
@@ -207,9 +227,6 @@ def cohort_engine():
     if uploaded_file:
 
         df = load_file(uploaded_file)
-
-        if df is None:
-            return
 
         st.success("File Loaded Successfully")
 
@@ -385,7 +402,10 @@ def cohort_engine():
 
             else:
 
-                payment_gate(result)
+                st.warning("Please take subscription to download results")
+
+                if st.button("Go to Subscription Page"):
+                    subscription_page()
 
 # ---------------- ADMIN DASHBOARD ---------------- #
 
@@ -407,13 +427,6 @@ def admin_dashboard():
     if logs.data:
         st.dataframe(pd.DataFrame(logs.data))
 
-    st.subheader("Payments")
-
-    payments = supabase.table("payments").select("*").execute()
-
-    if payments.data:
-        st.dataframe(pd.DataFrame(payments.data))
-
 # ---------------- MAIN ROUTER ---------------- #
 
 if not st.session_state.logged_in:
@@ -424,19 +437,18 @@ else:
 
     st.sidebar.title("Navigation")
 
-    pages = ["Cohort Analytics Engine", "Customer Analytics Engine"]
+    pages = ["Home", "Cohort Analytics Engine"]
 
     if st.session_state.user_email == ADMIN_EMAIL:
         pages.append("Admin Dashboard")
 
-    nav = st.sidebar.radio("Select Engine", pages)
+    nav = st.sidebar.radio("Select Page", pages)
 
     st.sidebar.write(f"Logged in as: {st.session_state.user_email}")
 
-    if nav == "Customer Analytics Engine":
+    if nav == "Home":
 
-        st.title("Customer Analytics Engine")
-        st.markdown("## Coming Soon")
+        subscription_page()
 
     elif nav == "Admin Dashboard":
 
