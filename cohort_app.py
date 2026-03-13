@@ -1,25 +1,21 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
 from datetime import datetime
 from supabase import create_client
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# -------------------------
-# SUPABASE CONFIG
-# -------------------------
+# ---------------- SUPABASE ---------------- #
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 UPI_ID = st.secrets["UPI_ID"]
+ADMIN_EMAIL = st.secrets["ADMIN_EMAIL"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# -------------------------
-# SESSION STATE
-# -------------------------
+# ---------------- SESSION ---------------- #
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -30,9 +26,7 @@ if "user_email" not in st.session_state:
 if "premium" not in st.session_state:
     st.session_state.premium = False
 
-# -------------------------
-# SIGNUP
-# -------------------------
+# ---------------- SIGNUP ---------------- #
 
 def signup():
 
@@ -44,7 +38,7 @@ def signup():
     if st.button("Signup"):
 
         if email == "" or password == "":
-            st.warning("Please enter email and password")
+            st.warning("Enter email and password")
             return
 
         try:
@@ -67,9 +61,7 @@ def signup():
         except:
             st.error("Signup failed")
 
-# -------------------------
-# LOGIN
-# -------------------------
+# ---------------- LOGIN ---------------- #
 
 def login():
 
@@ -110,29 +102,22 @@ def login():
         except:
             st.error("Login failed")
 
-# -------------------------
-# AUTH PAGE
-# -------------------------
+# ---------------- AUTH PAGE ---------------- #
 
 def auth_page():
 
     st.title("Analytics Engine")
 
-    option = st.radio(
-        "Select Option",
-        ["Login", "Signup"]
-    )
+    option = st.radio("Select Option", ["Login", "Signup"])
 
     if option == "Login":
         login()
     else:
         signup()
 
-# -------------------------
-# PAYMENT LOCK
-# -------------------------
+# ---------------- PAYMENT GATE ---------------- #
 
-def payment_gate():
+def payment_gate(result_df):
 
     st.warning("Premium subscription required to download output")
 
@@ -142,10 +127,12 @@ def payment_gate():
 
     txn = st.text_input("Enter UPI Transaction ID")
 
-    if st.button("Submit Payment"):
+    if txn:
 
-        if txn == "":
-            st.warning("Please enter transaction ID")
+        if len(txn) < 10:
+
+            st.error("Transaction ID must be at least 10 characters")
+
             return
 
         try:
@@ -154,17 +141,24 @@ def payment_gate():
                 "email": st.session_state.user_email,
                 "upi_txn": txn,
                 "amount": 25,
-                "verified": False
+                "verified": False,
+                "created_at": datetime.now().isoformat()
             }).execute()
 
-            st.success("Payment submitted. Waiting verification.")
-
         except:
-            st.error("Payment submission failed")
+            pass
 
-# -------------------------
-# FILE LOADER (FIXED)
-# -------------------------
+        st.success("Transaction recorded")
+
+        csv = result_df.to_csv(index=False)
+
+        st.download_button(
+            "Download Output",
+            csv,
+            "cohort_output.csv"
+        )
+
+# ---------------- FILE LOADER ---------------- #
 
 def load_file(uploaded_file):
 
@@ -175,24 +169,10 @@ def load_file(uploaded_file):
         if uploaded_file.name.lower().endswith(".csv"):
 
             try:
-
-                df = pd.read_csv(
-                    uploaded_file,
-                    encoding="utf-8",
-                    header=0,
-                    engine="python"
-                )
-
+                df = pd.read_csv(uploaded_file, encoding="utf-8", header=0)
             except:
-
                 uploaded_file.seek(0)
-
-                df = pd.read_csv(
-                    uploaded_file,
-                    encoding="latin1",
-                    header=0,
-                    engine="python"
-                )
+                df = pd.read_csv(uploaded_file, encoding="latin1", header=0)
 
         elif uploaded_file.name.lower().endswith(".xlsx"):
 
@@ -204,24 +184,16 @@ def load_file(uploaded_file):
             st.error("Unsupported file format")
             return None
 
-        df.columns = (
-            df.columns
-            .astype(str)
-            .str.strip()
-            .str.replace("\n", " ")
-        )
+        df.columns = df.columns.str.strip()
 
         return df
 
-    except Exception as e:
+    except:
 
         st.error("File could not be read")
-        st.write(e)
         return None
 
-# -------------------------
-# COHORT ENGINE
-# -------------------------
+# ---------------- COHORT ENGINE ---------------- #
 
 def cohort_engine():
 
@@ -240,11 +212,6 @@ def cohort_engine():
             return
 
         st.success("File Loaded Successfully")
-
-        st.write("Detected Columns:")
-        st.write(list(df.columns))
-
-        st.dataframe(df.head(10))
 
         columns = df.columns.tolist()
 
@@ -299,10 +266,6 @@ def cohort_engine():
         rev_flag = st.sidebar.checkbox("Revenue Contribution (RC_)")
 
         if st.button("Generate Cohorts"):
-
-            if not rank_flag and not pct_flag and not rev_flag:
-                st.warning("Select at least one cohort type")
-                return
 
             result = df.copy()
 
@@ -422,11 +385,36 @@ def cohort_engine():
 
             else:
 
-                payment_gate()
+                payment_gate(result)
 
-# -------------------------
-# MAIN ROUTER
-# -------------------------
+# ---------------- ADMIN DASHBOARD ---------------- #
+
+def admin_dashboard():
+
+    st.title("Admin Dashboard")
+
+    st.subheader("Users")
+
+    users = supabase.table("users").select("*").execute()
+
+    if users.data:
+        st.dataframe(pd.DataFrame(users.data))
+
+    st.subheader("Login Logs")
+
+    logs = supabase.table("login_logs").select("*").execute()
+
+    if logs.data:
+        st.dataframe(pd.DataFrame(logs.data))
+
+    st.subheader("Payments")
+
+    payments = supabase.table("payments").select("*").execute()
+
+    if payments.data:
+        st.dataframe(pd.DataFrame(payments.data))
+
+# ---------------- MAIN ROUTER ---------------- #
 
 if not st.session_state.logged_in:
 
@@ -436,13 +424,12 @@ else:
 
     st.sidebar.title("Navigation")
 
-    nav = st.sidebar.radio(
-        "Select Engine",
-        [
-            "Cohort Analytics Engine",
-            "Customer Analytics Engine"
-        ]
-    )
+    pages = ["Cohort Analytics Engine", "Customer Analytics Engine"]
+
+    if st.session_state.user_email == ADMIN_EMAIL:
+        pages.append("Admin Dashboard")
+
+    nav = st.sidebar.radio("Select Engine", pages)
 
     st.sidebar.write(f"Logged in as: {st.session_state.user_email}")
 
@@ -450,6 +437,10 @@ else:
 
         st.title("Customer Analytics Engine")
         st.markdown("## Coming Soon")
+
+    elif nav == "Admin Dashboard":
+
+        admin_dashboard()
 
     else:
 
