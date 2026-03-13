@@ -7,12 +7,31 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
 # ---------------------------------------------------------
+# ADMIN EMAIL FOR DOWNLOAD ACCESS
+# ---------------------------------------------------------
+
+ADMIN_EMAIL = "ashwanivatsalarya@gmail.com"
+
+# ---------------------------------------------------------
+# USER EMAIL INPUT
+# ---------------------------------------------------------
+
+st.sidebar.title("User")
+
+user_email = st.sidebar.text_input("Enter your email")
+
+if "user_email" not in st.session_state:
+    st.session_state.user_email = ""
+
+if user_email:
+    st.session_state.user_email = user_email
+
+# ---------------------------------------------------------
 # SESSION
 # ---------------------------------------------------------
 
 if "result" not in st.session_state:
     st.session_state.result = None
-
 
 # ---------------------------------------------------------
 # SIDEBAR MODULES
@@ -47,7 +66,6 @@ if module != "Cohort Analytics":
 
     st.stop()
 
-
 # ---------------------------------------------------------
 # FILE LOADER
 # ---------------------------------------------------------
@@ -69,7 +87,6 @@ def load_file(uploaded_file):
     df.columns = df.columns.str.strip()
 
     return df
-
 
 # ---------------------------------------------------------
 # COHORT ENGINE
@@ -143,7 +160,6 @@ st.title("Cohort Analytics Engine")
 
 left, right = st.columns([1,1.7])
 
-
 # ---------------------------------------------------------
 # LEFT CONFIGURATION PANEL
 # ---------------------------------------------------------
@@ -194,10 +210,6 @@ with left:
             ["None"] + columns
         )
 
-        # -----------------------------------------
-        # FISCAL FILTER
-        # -----------------------------------------
-
         if fiscal_col != "None":
 
             fy_vals = sorted(df[fiscal_col].dropna().unique())
@@ -216,11 +228,6 @@ with left:
 
                 fy = st.selectbox("Fiscal Year", fy_vals)
                 df = df[df[fiscal_col] == fy]
-
-
-        # -----------------------------------------
-        # COHORT SETTINGS
-        # -----------------------------------------
 
         st.markdown("### Individual Cohorts")
 
@@ -291,49 +298,12 @@ with left:
                         how="left"
                     )
 
-            for group in hierarchies:
-
-                name = "_".join(group)
-
-                if sg:
-
-                    sg_temp = cohort_engine(df, metric, group, "SG")
-
-                    result = result.merge(
-                        sg_temp[group+[f"SG_{name}"]],
-                        on=group,
-                        how="left"
-                    )
-
-                if pc:
-
-                    pc_temp = cohort_engine(df, metric, group, "PC")
-
-                    result = result.merge(
-                        pc_temp[group+[f"PC_{name}"]],
-                        on=group,
-                        how="left"
-                    )
-
-                if rc:
-
-                    rc_temp = cohort_engine(df, metric, group, "RC")
-
-                    result = result.merge(
-                        rc_temp[group+[f"RC_{name}"]],
-                        on=group,
-                        how="left"
-                    )
-
             st.session_state.result = result
             st.session_state.df = df
             st.session_state.metric = metric
             st.session_state.customer_col = customer_col
             st.session_state.date_col = date_col
-            st.session_state.geo_col = geo_col
-            st.session_state.product_col = product_col
             st.session_state.fiscal_col = fiscal_col
-
 
 # ---------------------------------------------------------
 # RIGHT ANALYTICS PANEL
@@ -346,17 +316,11 @@ with right:
         df = st.session_state.df
         metric = st.session_state.metric
         result = st.session_state.result
-
         customer_col = st.session_state.customer_col
         date_col = st.session_state.date_col
         fiscal_col = st.session_state.fiscal_col
 
-
-        tabs = st.tabs([
-            "Summary",
-            "Cohort Analytics",
-            "Output"
-        ])
+        tabs = st.tabs(["Summary","Cohort Analytics","Output"])
 
 # ---------------------------------------------------------
 # SUMMARY
@@ -381,7 +345,6 @@ with right:
 
                 st.dataframe(summary)
 
-                # Revenue chart
                 fig = go.Figure()
 
                 fig.add_bar(
@@ -400,71 +363,6 @@ with right:
                 )
 
                 st.plotly_chart(fig,use_container_width=True)
-
-                # Customers chart
-                fig2 = px.bar(
-                    summary,
-                    x=fiscal_col,
-                    y="Customers",
-                    title="Customers by Fiscal Year"
-                )
-
-                st.plotly_chart(fig2,use_container_width=True)
-
-                # Revenue per customer chart
-                fig3 = px.bar(
-                    summary,
-                    x=fiscal_col,
-                    y="Revenue per Customer",
-                    title="Revenue per Customer"
-                )
-
-                st.plotly_chart(fig3,use_container_width=True)
-
-
-                # ---------------------------------
-                # SEGMENTATION
-                # ---------------------------------
-
-                seg = (
-                    df.groupby(customer_col)[metric]
-                    .sum()
-                    .reset_index()
-                )
-
-                seg["Rank"] = seg[metric].rank(
-                    method="dense",
-                    ascending=False
-                )
-
-                seg["Pct"] = seg["Rank"]/seg["Rank"].max()
-
-                seg["Segment"] = pd.cut(
-                    seg["Pct"],
-                    bins=[0,.05,.1,.2,1],
-                    labels=[
-                        "Top 5%",
-                        "Top 10%",
-                        "Top 20%",
-                        "Long Tail"
-                    ]
-                )
-
-                pie = (
-                    seg.groupby("Segment")[metric]
-                    .sum()
-                    .reset_index()
-                )
-
-                fig4 = px.pie(
-                    pie,
-                    names="Segment",
-                    values=metric,
-                    title="Customer Segmentation"
-                )
-
-                st.plotly_chart(fig4,use_container_width=True)
-
 
 # ---------------------------------------------------------
 # COHORT ANALYTICS
@@ -504,22 +402,6 @@ with right:
 
                 st.plotly_chart(fig,use_container_width=True)
 
-
-                retention = pivot.divide(
-                    pivot.iloc[:,0],
-                    axis=0
-                )
-
-                fig2 = px.imshow(
-                    retention,
-                    text_auto=".0%",
-                    color_continuous_scale="Greens",
-                    title="Retention %"
-                )
-
-                st.plotly_chart(fig2,use_container_width=True)
-
-
 # ---------------------------------------------------------
 # OUTPUT
 # ---------------------------------------------------------
@@ -530,8 +412,22 @@ with right:
 
             csv = result.to_csv(index=False)
 
-            st.download_button(
-                "Download Output",
-                csv,
-                "cohort_output.csv"
-            )
+            if st.session_state.user_email == ADMIN_EMAIL:
+
+                st.download_button(
+                    "Download Output",
+                    csv,
+                    "cohort_output.csv"
+                )
+
+            else:
+
+                st.download_button(
+                    "Download Output",
+                    csv,
+                    disabled=True
+                )
+
+                st.warning(
+                    "🔒 Download is available only for subscribed users."
+                )
