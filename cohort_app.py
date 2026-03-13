@@ -6,29 +6,29 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# --------------------------------------------------
-# ADMIN EMAIL (download allowed)
-# --------------------------------------------------
+# -------------------------------------------------
+# ADMIN EMAIL FOR DOWNLOAD ACCESS
+# -------------------------------------------------
 
 ADMIN_EMAIL = "ashwanivatsalarya@gmail.com"
+
+# -------------------------------------------------
+# USER EMAIL INPUT
+# -------------------------------------------------
+
+st.sidebar.title("User Login")
+
+user_email = st.sidebar.text_input("Enter Email")
 
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 
-# --------------------------------------------------
-# LOGIN
-# --------------------------------------------------
-
-st.sidebar.title("User")
-
-user_email = st.sidebar.text_input("Enter Email")
-
 if user_email:
     st.session_state.user_email = user_email
 
-# --------------------------------------------------
-# MODULES
-# --------------------------------------------------
+# -------------------------------------------------
+# MODULE SELECTOR
+# -------------------------------------------------
 
 st.sidebar.title("Analytics Modules")
 
@@ -42,10 +42,6 @@ module = st.sidebar.radio(
         "Revenue Concentration"
     ]
 )
-
-# --------------------------------------------------
-# COMING SOON MODULES
-# --------------------------------------------------
 
 if module in [
     "Product Bundling",
@@ -67,9 +63,20 @@ if module in [
 
     st.stop()
 
-# --------------------------------------------------
+# -------------------------------------------------
+# FILE UPLOAD
+# -------------------------------------------------
+
+st.title("Analytics Engine")
+
+uploaded_file = st.file_uploader(
+    "Upload CSV or Excel",
+    type=["csv","xlsx"]
+)
+
+# -------------------------------------------------
 # FILE LOADER
-# --------------------------------------------------
+# -------------------------------------------------
 
 def load_file(uploaded_file):
 
@@ -88,9 +95,10 @@ def load_file(uploaded_file):
 
     return df
 
-# --------------------------------------------------
+
+# -------------------------------------------------
 # COHORT ENGINE
-# --------------------------------------------------
+# -------------------------------------------------
 
 def cohort_engine(df, metric, cols, cohort_type):
 
@@ -110,6 +118,7 @@ def cohort_engine(df, metric, cols, cohort_type):
     if cohort_type == "SG":
 
         def bucket(x):
+
             if x <= 10: return "Top 10"
             elif x <= 25: return "11-25"
             elif x <= 50: return "26-50"
@@ -122,6 +131,7 @@ def cohort_engine(df, metric, cols, cohort_type):
         temp["Pct"] = temp["Rank"] / max_rank
 
         def bucket(x):
+
             if x <= .05: return "Top 5%"
             elif x <= .10: return "Top 10%"
             elif x <= .20: return "Top 20%"
@@ -133,10 +143,13 @@ def cohort_engine(df, metric, cols, cohort_type):
     if cohort_type == "RC":
 
         temp["Cum"] = temp[metric].cumsum()
+
         total = temp[metric].sum()
+
         temp["Share"] = temp["Cum"] / total
 
         def bucket(x):
+
             if x <= .2: return "Top Drivers"
             elif x <= .5: return "Mid Tier"
             elif x <= .8: return "Long Tail"
@@ -146,56 +159,38 @@ def cohort_engine(df, metric, cols, cohort_type):
 
     return temp
 
-# --------------------------------------------------
-# PAGE TITLE
-# --------------------------------------------------
 
-st.title("Analytics Engine")
-
-uploaded_file = st.file_uploader(
-    "Upload CSV or Excel",
-    type=["csv","xlsx"]
-)
+# -------------------------------------------------
+# LOAD DATA
+# -------------------------------------------------
 
 if uploaded_file:
 
     df = load_file(uploaded_file)
 
+    st.success("File Loaded Successfully")
+
     columns = df.columns.tolist()
 
-    st.success("File Loaded")
-
-# --------------------------------------------------
+# -------------------------------------------------
 # FIELD MAPPING
-# --------------------------------------------------
+# -------------------------------------------------
 
     st.subheader("Field Mapping")
 
     metric = st.selectbox("Metric Column", columns)
 
-    customer_col = st.selectbox(
-        "Customer Column",
-        ["None"] + columns
-    )
+    customer_col = st.selectbox("Customer Column", ["None"] + columns)
 
-    date_col = st.selectbox(
-        "Date Column",
-        ["None"] + columns
-    )
+    date_col = st.selectbox("Date Column", ["None"] + columns)
 
-    geo_col = st.selectbox(
-        "Geography Column",
-        ["None"] + columns
-    )
+    geo_col = st.selectbox("Geography Column", ["None"] + columns)
 
-    fiscal_col = st.selectbox(
-        "Fiscal Year Column",
-        ["None"] + columns
-    )
+    fiscal_col = st.selectbox("Fiscal Year Column", ["None"] + columns)
 
-# --------------------------------------------------
-# CUSTOMER ANALYTICS MODULE
-# --------------------------------------------------
+# -------------------------------------------------
+# CUSTOMER ANALYTICS
+# -------------------------------------------------
 
     if module == "Customer Analytics":
 
@@ -205,12 +200,12 @@ if uploaded_file:
             df.groupby(customer_col)[metric]
             .sum()
             .reset_index()
-            .sort_values(metric,ascending=False)
+            .sort_values(metric, ascending=False)
         )
 
         total_customers = cust_rev[customer_col].nunique()
         total_revenue = cust_rev[metric].sum()
-        rev_per_customer = total_revenue/total_customers
+        rev_per_customer = total_revenue / total_customers
 
         c1,c2,c3 = st.columns(3)
 
@@ -218,31 +213,31 @@ if uploaded_file:
         c2.metric("Revenue", round(total_revenue,2))
         c3.metric("Revenue / Customer", round(rev_per_customer,2))
 
-        st.subheader("Customer Revenue Distribution")
-
         fig = px.histogram(
             cust_rev,
             x=metric,
-            nbins=30
+            nbins=30,
+            title="Customer Revenue Distribution"
         )
 
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
         st.subheader("Top Customers")
 
         st.dataframe(cust_rev.head(20))
 
-        fig = px.bar(
+        fig2 = px.bar(
             cust_rev.head(10),
             x=customer_col,
-            y=metric
+            y=metric,
+            title="Top Customers"
         )
 
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True)
 
-# --------------------------------------------------
-# COHORT ANALYTICS MODULE
-# --------------------------------------------------
+# -------------------------------------------------
+# COHORT ANALYTICS
+# -------------------------------------------------
 
     if module == "Cohort Analytics":
 
@@ -264,7 +259,9 @@ if uploaded_file:
             for col in individual_cols:
 
                 if sg:
+
                     sg_temp = cohort_engine(df, metric, [col], "SG")
+
                     result = result.merge(
                         sg_temp[[col,f"SG_{col}"]],
                         on=col,
@@ -272,7 +269,9 @@ if uploaded_file:
                     )
 
                 if pc:
+
                     pc_temp = cohort_engine(df, metric, [col], "PC")
+
                     result = result.merge(
                         pc_temp[[col,f"PC_{col}"]],
                         on=col,
@@ -280,22 +279,24 @@ if uploaded_file:
                     )
 
                 if rc:
+
                     rc_temp = cohort_engine(df, metric, [col], "RC")
+
                     result = result.merge(
                         rc_temp[[col,f"RC_{col}"]],
                         on=col,
                         how="left"
                     )
 
-            st.subheader("Output")
+            st.subheader("Output Dataset")
 
             st.dataframe(result)
 
-            csv = result.to_csv(index=False)
-
-# --------------------------------------------------
+# -------------------------------------------------
 # DOWNLOAD PAYWALL
-# --------------------------------------------------
+# -------------------------------------------------
+
+            csv = result.to_csv(index=False)
 
             if st.session_state.user_email == ADMIN_EMAIL:
 
