@@ -2,20 +2,21 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# ------------------------------------------------
+# -----------------------------------------------------
 # SESSION
-# ------------------------------------------------
+# -----------------------------------------------------
 
 if "result" not in st.session_state:
     st.session_state.result = None
 
 
-# ------------------------------------------------
-# SIDEBAR MODULES
-# ------------------------------------------------
+# -----------------------------------------------------
+# SIDEBAR
+# -----------------------------------------------------
 
 st.sidebar.title("Analytics Modules")
 
@@ -46,21 +47,20 @@ if module != "Cohort Analytics":
 
     st.stop()
 
-
-# ------------------------------------------------
+# -----------------------------------------------------
 # FILE LOADER
-# ------------------------------------------------
+# -----------------------------------------------------
 
 def load_file(uploaded_file):
 
     if uploaded_file.name.endswith(".csv"):
 
         try:
-            df = pd.read_csv(uploaded_file, header=0, encoding="utf-8")
+            df = pd.read_csv(uploaded_file, encoding="utf-8")
 
         except:
             uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, header=0, encoding="latin1")
+            df = pd.read_csv(uploaded_file, encoding="latin1")
 
     else:
         df = pd.read_excel(uploaded_file)
@@ -70,125 +70,81 @@ def load_file(uploaded_file):
     return df
 
 
-# ------------------------------------------------
+# -----------------------------------------------------
 # COHORT ENGINE
-# ------------------------------------------------
+# -----------------------------------------------------
 
-def cohort_engine(df, metric, individual_cols, hierarchies, rank_flag, pct_flag, rev_flag):
+def cohort_engine(df, metric, cols, cohort_type):
 
-    result = df.copy()
+    temp = (
+        df.groupby(cols)[metric]
+        .sum()
+        .reset_index()
+        .sort_values(metric, ascending=False)
+    )
 
-    def clean(cols):
-        return "_".join(cols)
+    temp["Rank"] = temp[metric].rank(method="dense", ascending=False)
 
-    def cohort_calc(cols):
+    max_rank = temp["Rank"].max()
 
-        temp = (
-            df.groupby(cols)[metric]
-            .sum()
-            .reset_index()
-            .sort_values(metric, ascending=False)
-        )
+    name = "_".join(cols)
 
-        temp["Rank"] = temp[metric].rank(method="dense", ascending=False)
+    if cohort_type == "SG":
 
-        max_rank = temp["Rank"].max()
+        def bucket(x):
 
-        outputs = {}
+            if x <= 10: return "Top 10"
+            elif x <= 25: return "11-25"
+            elif x <= 50: return "26-50"
+            else: return "Others"
 
-        name = clean(cols)
+        temp[f"SG_{name}"] = temp["Rank"].apply(bucket)
 
-        if rank_flag:
+    if cohort_type == "PC":
 
-            def bucket(x):
-                if x <= 10: return "Top 10"
-                elif x <= 25: return "11-25"
-                elif x <= 50: return "26-50"
-                else: return "Others"
+        temp["Pct"] = temp["Rank"]/max_rank
 
-            outputs[f"SG_{name}"] = temp["Rank"].apply(bucket)
+        def bucket(x):
 
-        if pct_flag:
+            if x <= .05: return "Top 5%"
+            elif x <= .10: return "Top 10%"
+            elif x <= .20: return "Top 20%"
+            elif x <= .50: return "Top 50%"
+            else: return "Bottom 50%"
 
-            temp["Pct"] = temp["Rank"] / max_rank
+        temp[f"PC_{name}"] = temp["Pct"].apply(bucket)
 
-            def bucket(x):
-                if x <= .05: return "Top 5%"
-                elif x <= .10: return "Top 10%"
-                elif x <= .20: return "Top 20%"
-                elif x <= .50: return "Top 50%"
-                else: return "Bottom 50%"
+    if cohort_type == "RC":
 
-            outputs[f"PC_{name}"] = temp["Pct"].apply(bucket)
+        temp["Cum"] = temp[metric].cumsum()
 
-        if rev_flag:
+        total = temp[metric].sum()
 
-            temp["Cum"] = temp[metric].cumsum()
-            total = temp[metric].sum()
+        temp["Share"] = temp["Cum"]/total
 
-            temp["Share"] = temp["Cum"] / total
+        def bucket(x):
 
-            def bucket(x):
-                if x <= .2: return "Top Drivers"
-                elif x <= .5: return "Mid Tier"
-                elif x <= .8: return "Long Tail"
-                else: return "Bottom Tail"
+            if x <= .2: return "Top Drivers"
+            elif x <= .5: return "Mid Tier"
+            elif x <= .8: return "Long Tail"
+            else: return "Bottom Tail"
 
-            outputs[f"RC_{name}"] = temp["Share"].apply(bucket)
+        temp[f"RC_{name}"] = temp["Share"].apply(bucket)
 
-        return temp, outputs
+    return temp
 
 
-    for col in individual_cols:
-
-        temp, outputs = cohort_calc([col])
-
-        for name, val in outputs.items():
-
-            temp[name] = val
-
-            result = result.merge(
-                temp[[col, name]],
-                on=col,
-                how="left"
-            )
-
-    for group in hierarchies:
-
-        temp, outputs = cohort_calc(group)
-
-        for name, val in outputs.items():
-
-            temp[name] = val
-
-            result = result.merge(
-                temp[group + [name]],
-                on=group,
-                how="left"
-            )
-
-    cohort_cols = [
-        c for c in result.columns
-        if c.startswith(("SG_", "PC_", "RC_"))
-    ]
-
-    result[cohort_cols] = result[cohort_cols].fillna("Others")
-
-    return result
-
-
-# ------------------------------------------------
-# MAIN PAGE
-# ------------------------------------------------
+# -----------------------------------------------------
+# PAGE
+# -----------------------------------------------------
 
 st.title("Cohort Analytics Engine")
 
-left, right = st.columns([1,1.6])
+left, right = st.columns([1,1.7])
 
-
-# ------------------------------------------------
-# LEFT PANEL
-# ------------------------------------------------
+# -----------------------------------------------------
+# LEFT CONFIGURATION
+# -----------------------------------------------------
 
 with left:
 
@@ -203,13 +159,13 @@ with left:
 
         df = load_file(uploaded_file)
 
-        st.success("File Loaded Successfully")
-
         columns = df.columns.tolist()
 
-        st.markdown("### Map Fields")
+        st.success("File Loaded")
 
-        metric = st.selectbox("Revenue / Metric Column", columns)
+        st.markdown("### Field Mapping")
+
+        metric = st.selectbox("Metric Column", columns)
 
         customer_col = st.selectbox(
             "Customer Column",
@@ -231,20 +187,42 @@ with left:
             ["None"] + columns
         )
 
-        if date_col != "None":
+        fiscal_col = st.selectbox(
+            "Fiscal Year Column",
+            ["None"] + columns
+        )
 
-            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        # ---------------------------------------------
+        # Fiscal filtering
+        # ---------------------------------------------
 
-            df["Year"] = df[date_col].dt.year
+        if fiscal_col != "None":
 
-            year_filter = st.selectbox(
-                "Fiscal Year",
-                ["All"] + sorted(df["Year"].dropna().unique())
+            fiscal_values = sorted(df[fiscal_col].dropna().unique())
+
+            period_logic = st.selectbox(
+                "Period Logic",
+                ["All Periods","Latest Period","Select Fiscal Year"]
             )
 
-            if year_filter != "All":
-                df = df[df["Year"] == year_filter]
+            if period_logic == "Latest Period":
 
+                latest = fiscal_values[-1]
+
+                df = df[df[fiscal_col] == latest]
+
+            if period_logic == "Select Fiscal Year":
+
+                fy = st.selectbox(
+                    "Fiscal Year",
+                    fiscal_values
+                )
+
+                df = df[df[fiscal_col] == fy]
+
+        # ---------------------------------------------
+        # Cohort columns
+        # ---------------------------------------------
 
         st.markdown("### Individual Cohorts")
 
@@ -273,24 +251,81 @@ with left:
             if cols:
                 hierarchies.append(cols)
 
-
         st.markdown("### Cohort Types")
 
-        rank_flag = st.checkbox("Size Group (SG_)")
-        pct_flag = st.checkbox("Percentile (PC_)")
-        rev_flag = st.checkbox("Revenue Contribution (RC_)")
+        sg = st.checkbox("Size Group (SG_)")
+        pc = st.checkbox("Percentile (PC_)")
+        rc = st.checkbox("Revenue Contribution (RC_)")
 
         if st.button("Generate Cohorts"):
 
-            result = cohort_engine(
-                df,
-                metric,
-                individual_cols,
-                hierarchies,
-                rank_flag,
-                pct_flag,
-                rev_flag
-            )
+            result = df.copy()
+
+            for col in individual_cols:
+
+                if sg:
+
+                    sg_temp = cohort_engine(df, metric, [col], "SG")
+
+                    result = result.merge(
+                        sg_temp[[col,f"SG_{col}"]],
+                        on=col,
+                        how="left"
+                    )
+
+                if pc:
+
+                    pc_temp = cohort_engine(df, metric, [col], "PC")
+
+                    result = result.merge(
+                        pc_temp[[col,f"PC_{col}"]],
+                        on=col,
+                        how="left"
+                    )
+
+                if rc:
+
+                    rc_temp = cohort_engine(df, metric, [col], "RC")
+
+                    result = result.merge(
+                        rc_temp[[col,f"RC_{col}"]],
+                        on=col,
+                        how="left"
+                    )
+
+            for group in hierarchies:
+
+                name = "_".join(group)
+
+                if sg:
+
+                    sg_temp = cohort_engine(df, metric, group, "SG")
+
+                    result = result.merge(
+                        sg_temp[group+[f"SG_{name}"]],
+                        on=group,
+                        how="left"
+                    )
+
+                if pc:
+
+                    pc_temp = cohort_engine(df, metric, group, "PC")
+
+                    result = result.merge(
+                        pc_temp[group+[f"PC_{name}"]],
+                        on=group,
+                        how="left"
+                    )
+
+                if rc:
+
+                    rc_temp = cohort_engine(df, metric, group, "RC")
+
+                    result = result.merge(
+                        rc_temp[group+[f"RC_{name}"]],
+                        on=group,
+                        how="left"
+                    )
 
             st.session_state.result = result
             st.session_state.df = df
@@ -299,28 +334,30 @@ with left:
             st.session_state.date_col = date_col
             st.session_state.geo_col = geo_col
             st.session_state.product_col = product_col
+            st.session_state.fiscal_col = fiscal_col
 
 
-# ------------------------------------------------
-# RIGHT PANEL
-# ------------------------------------------------
+# -----------------------------------------------------
+# RIGHT ANALYTICS
+# -----------------------------------------------------
 
 with right:
 
     if st.session_state.result is not None:
 
-        result = st.session_state.result
         df = st.session_state.df
         metric = st.session_state.metric
+        result = st.session_state.result
 
         customer_col = st.session_state.customer_col
-        date_col = st.session_state.date_col
         geo_col = st.session_state.geo_col
         product_col = st.session_state.product_col
+        date_col = st.session_state.date_col
+        fiscal_col = st.session_state.fiscal_col
 
         tabs = st.tabs([
             "Summary",
-            "Revenue",
+            "Revenue Charts",
             "Concentration",
             "Segmentation",
             "Cohort Heatmap",
@@ -328,33 +365,57 @@ with right:
             "Output"
         ])
 
-        # ---------------- SUMMARY ----------------
+        # ---------------------------------------------
+        # SUMMARY
+        # ---------------------------------------------
 
         with tabs[0]:
 
-            total_revenue = df[metric].sum()
+            total_rev = df[metric].sum()
 
-            customers = (
-                df[customer_col].nunique()
-                if customer_col != "None"
-                else None
-            )
+            cust = df[customer_col].nunique() if customer_col!="None" else None
 
-            rev_per_customer = (
-                total_revenue/customers
-                if customers else None
-            )
+            rev_per = total_rev/cust if cust else None
 
             c1,c2,c3 = st.columns(3)
 
-            c1.metric("Revenue", round(total_revenue,2))
-            c2.metric("Customers", customers)
-            c3.metric("Revenue / Customer", round(rev_per_customer,2) if rev_per_customer else None)
+            c1.metric("Revenue", round(total_rev,2))
+            c2.metric("Customers", cust)
+            c3.metric("Revenue / Customer", round(rev_per,2) if rev_per else None)
 
 
-        # ---------------- REVENUE ----------------
+        # ---------------------------------------------
+        # REVENUE CHARTS
+        # ---------------------------------------------
 
         with tabs[1]:
+
+            if fiscal_col != "None":
+
+                fy_rev = (
+                    df.groupby(fiscal_col)[metric]
+                    .sum()
+                    .reset_index()
+                )
+
+                fig = go.Figure()
+
+                fig.add_bar(
+                    x=fy_rev[fiscal_col],
+                    y=fy_rev[metric],
+                    name="Revenue"
+                )
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=fy_rev[fiscal_col],
+                        y=fy_rev[metric],
+                        mode="lines+markers",
+                        name="Trend"
+                    )
+                )
+
+                st.plotly_chart(fig,use_container_width=True)
 
             if geo_col != "None":
 
@@ -367,33 +428,15 @@ with right:
                 fig = px.bar(
                     geo_chart,
                     x=geo_col,
-                    y=metric,
-                    title="Revenue by Geography"
+                    y=metric
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig,use_container_width=True)
 
 
-            if product_col != "None":
-
-                prod_chart = (
-                    df.groupby(product_col)[metric]
-                    .sum()
-                    .reset_index()
-                    .sort_values(metric,ascending=False)
-                )
-
-                fig = px.bar(
-                    prod_chart.head(15),
-                    x=product_col,
-                    y=metric,
-                    title="Top Products"
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-
-        # ---------------- CONCENTRATION ----------------
+        # ---------------------------------------------
+        # CONCENTRATION
+        # ---------------------------------------------
 
         with tabs[2]:
 
@@ -407,18 +450,17 @@ with right:
                 )
 
                 pareto["Cum"] = pareto[metric].cumsum()
+
                 pareto["Share"] = pareto["Cum"]/pareto[metric].sum()
 
-                fig = px.line(
-                    pareto,
-                    y="Share",
-                    title="Revenue Concentration"
-                )
+                fig = px.line(pareto,y="Share")
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig,use_container_width=True)
 
 
-        # ---------------- SEGMENTATION ----------------
+        # ---------------------------------------------
+        # SEGMENTATION
+        # ---------------------------------------------
 
         with tabs[3]:
 
@@ -437,14 +479,16 @@ with right:
 
                 seg["Pct"] = seg["Rank"]/seg["Rank"].max()
 
-                def bucket(x):
-
-                    if x <= .05: return "Top 5%"
-                    elif x <= .10: return "Top 10%"
-                    elif x <= .20: return "Top 20%"
-                    else: return "Long Tail"
-
-                seg["Segment"] = seg["Pct"].apply(bucket)
+                seg["Segment"] = pd.cut(
+                    seg["Pct"],
+                    bins=[0,.05,.1,.2,1],
+                    labels=[
+                        "Top 5%",
+                        "Top 10%",
+                        "Top 20%",
+                        "Long Tail"
+                    ]
+                )
 
                 pie = (
                     seg.groupby("Segment")[metric]
@@ -461,11 +505,15 @@ with right:
                 st.plotly_chart(fig)
 
 
-        # ---------------- COHORT HEATMAP ----------------
+        # ---------------------------------------------
+        # COHORT HEATMAP
+        # ---------------------------------------------
 
         with tabs[4]:
 
-            if customer_col != "None" and date_col != "None":
+            if customer_col!="None" and date_col!="None":
+
+                df[date_col] = pd.to_datetime(df[date_col])
 
                 df["OrderMonth"] = df[date_col].dt.to_period("M").astype(str)
 
@@ -488,18 +536,20 @@ with right:
 
                 fig = px.imshow(
                     pivot,
-                    aspect="auto",
+                    text_auto=True,
                     color_continuous_scale="Blues"
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig,use_container_width=True)
 
 
-        # ---------------- RETENTION % ----------------
+        # ---------------------------------------------
+        # RETENTION
+        # ---------------------------------------------
 
         with tabs[5]:
 
-            if customer_col != "None" and date_col != "None":
+            if customer_col!="None" and date_col!="None":
 
                 retention = pivot.divide(
                     pivot.iloc[:,0],
@@ -508,14 +558,16 @@ with right:
 
                 fig = px.imshow(
                     retention,
-                    aspect="auto",
+                    text_auto=".0%",
                     color_continuous_scale="Greens"
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig,use_container_width=True)
 
 
-        # ---------------- OUTPUT ----------------
+        # ---------------------------------------------
+        # OUTPUT
+        # ---------------------------------------------
 
         with tabs[6]:
 
