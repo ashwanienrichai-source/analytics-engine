@@ -6,17 +6,17 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# -----------------------------------------------------
+# ---------------------------------------------------------
 # SESSION
-# -----------------------------------------------------
+# ---------------------------------------------------------
 
 if "result" not in st.session_state:
     st.session_state.result = None
 
 
-# -----------------------------------------------------
-# SIDEBAR
-# -----------------------------------------------------
+# ---------------------------------------------------------
+# SIDEBAR MODULES
+# ---------------------------------------------------------
 
 st.sidebar.title("Analytics Modules")
 
@@ -47,9 +47,10 @@ if module != "Cohort Analytics":
 
     st.stop()
 
-# -----------------------------------------------------
+
+# ---------------------------------------------------------
 # FILE LOADER
-# -----------------------------------------------------
+# ---------------------------------------------------------
 
 def load_file(uploaded_file):
 
@@ -70,9 +71,9 @@ def load_file(uploaded_file):
     return df
 
 
-# -----------------------------------------------------
+# ---------------------------------------------------------
 # COHORT ENGINE
-# -----------------------------------------------------
+# ---------------------------------------------------------
 
 def cohort_engine(df, metric, cols, cohort_type):
 
@@ -102,7 +103,7 @@ def cohort_engine(df, metric, cols, cohort_type):
 
     if cohort_type == "PC":
 
-        temp["Pct"] = temp["Rank"]/max_rank
+        temp["Pct"] = temp["Rank"] / max_rank
 
         def bucket(x):
 
@@ -120,7 +121,7 @@ def cohort_engine(df, metric, cols, cohort_type):
 
         total = temp[metric].sum()
 
-        temp["Share"] = temp["Cum"]/total
+        temp["Share"] = temp["Cum"] / total
 
         def bucket(x):
 
@@ -134,17 +135,18 @@ def cohort_engine(df, metric, cols, cohort_type):
     return temp
 
 
-# -----------------------------------------------------
-# PAGE
-# -----------------------------------------------------
+# ---------------------------------------------------------
+# PAGE TITLE
+# ---------------------------------------------------------
 
 st.title("Cohort Analytics Engine")
 
 left, right = st.columns([1,1.7])
 
-# -----------------------------------------------------
-# LEFT CONFIGURATION
-# -----------------------------------------------------
+
+# ---------------------------------------------------------
+# LEFT CONFIGURATION PANEL
+# ---------------------------------------------------------
 
 with left:
 
@@ -192,37 +194,33 @@ with left:
             ["None"] + columns
         )
 
-        # ---------------------------------------------
-        # Fiscal filtering
-        # ---------------------------------------------
+        # -----------------------------------------
+        # FISCAL FILTER
+        # -----------------------------------------
 
         if fiscal_col != "None":
 
-            fiscal_values = sorted(df[fiscal_col].dropna().unique())
+            fy_vals = sorted(df[fiscal_col].dropna().unique())
 
-            period_logic = st.selectbox(
+            logic = st.selectbox(
                 "Period Logic",
                 ["All Periods","Latest Period","Select Fiscal Year"]
             )
 
-            if period_logic == "Latest Period":
+            if logic == "Latest Period":
 
-                latest = fiscal_values[-1]
-
+                latest = fy_vals[-1]
                 df = df[df[fiscal_col] == latest]
 
-            if period_logic == "Select Fiscal Year":
+            if logic == "Select Fiscal Year":
 
-                fy = st.selectbox(
-                    "Fiscal Year",
-                    fiscal_values
-                )
-
+                fy = st.selectbox("Fiscal Year", fy_vals)
                 df = df[df[fiscal_col] == fy]
 
-        # ---------------------------------------------
-        # Cohort columns
-        # ---------------------------------------------
+
+        # -----------------------------------------
+        # COHORT SETTINGS
+        # -----------------------------------------
 
         st.markdown("### Individual Cohorts")
 
@@ -337,9 +335,9 @@ with left:
             st.session_state.fiscal_col = fiscal_col
 
 
-# -----------------------------------------------------
-# RIGHT ANALYTICS
-# -----------------------------------------------------
+# ---------------------------------------------------------
+# RIGHT ANALYTICS PANEL
+# ---------------------------------------------------------
 
 with right:
 
@@ -350,66 +348,52 @@ with right:
         result = st.session_state.result
 
         customer_col = st.session_state.customer_col
-        geo_col = st.session_state.geo_col
-        product_col = st.session_state.product_col
         date_col = st.session_state.date_col
         fiscal_col = st.session_state.fiscal_col
 
+
         tabs = st.tabs([
             "Summary",
-            "Revenue Charts",
-            "Concentration",
-            "Segmentation",
-            "Cohort Heatmap",
-            "Retention %",
+            "Cohort Analytics",
             "Output"
         ])
 
-        # ---------------------------------------------
-        # SUMMARY
-        # ---------------------------------------------
+# ---------------------------------------------------------
+# SUMMARY
+# ---------------------------------------------------------
 
         with tabs[0]:
 
-            total_rev = df[metric].sum()
-
-            cust = df[customer_col].nunique() if customer_col!="None" else None
-
-            rev_per = total_rev/cust if cust else None
-
-            c1,c2,c3 = st.columns(3)
-
-            c1.metric("Revenue", round(total_rev,2))
-            c2.metric("Customers", cust)
-            c3.metric("Revenue / Customer", round(rev_per,2) if rev_per else None)
-
-
-        # ---------------------------------------------
-        # REVENUE CHARTS
-        # ---------------------------------------------
-
-        with tabs[1]:
-
             if fiscal_col != "None":
 
-                fy_rev = (
-                    df.groupby(fiscal_col)[metric]
-                    .sum()
+                summary = (
+                    df.groupby(fiscal_col)
+                    .agg(
+                        Revenue=(metric,"sum"),
+                        Customers=(customer_col,"nunique")
+                    )
                     .reset_index()
                 )
 
+                summary["Revenue per Customer"] = (
+                    summary["Revenue"] / summary["Customers"]
+                )
+
+                st.dataframe(summary)
+
+                # Revenue chart
                 fig = go.Figure()
 
                 fig.add_bar(
-                    x=fy_rev[fiscal_col],
-                    y=fy_rev[metric],
+                    x=summary[fiscal_col],
+                    y=summary["Revenue"],
                     name="Revenue"
                 )
 
                 fig.add_trace(
                     go.Scatter(
-                        x=fy_rev[fiscal_col],
-                        y=fy_rev[metric],
+                        x=summary[fiscal_col],
+                        y=summary["Revenue"],
                         mode="lines+markers",
                         name="Trend"
                     )
@@ -417,54 +401,30 @@ with right:
 
                 st.plotly_chart(fig,use_container_width=True)
 
-            if geo_col != "None":
-
-                geo_chart = (
-                    df.groupby(geo_col)[metric]
-                    .sum()
-                    .reset_index()
+                # Customers chart
+                fig2 = px.bar(
+                    summary,
+                    x=fiscal_col,
+                    y="Customers",
+                    title="Customers by Fiscal Year"
                 )
 
-                fig = px.bar(
-                    geo_chart,
-                    x=geo_col,
-                    y=metric
+                st.plotly_chart(fig2,use_container_width=True)
+
+                # Revenue per customer chart
+                fig3 = px.bar(
+                    summary,
+                    x=fiscal_col,
+                    y="Revenue per Customer",
+                    title="Revenue per Customer"
                 )
 
-                st.plotly_chart(fig,use_container_width=True)
+                st.plotly_chart(fig3,use_container_width=True)
 
 
-        # ---------------------------------------------
-        # CONCENTRATION
-        # ---------------------------------------------
-
-        with tabs[2]:
-
-            if customer_col != "None":
-
-                pareto = (
-                    df.groupby(customer_col)[metric]
-                    .sum()
-                    .reset_index()
-                    .sort_values(metric,ascending=False)
-                )
-
-                pareto["Cum"] = pareto[metric].cumsum()
-
-                pareto["Share"] = pareto["Cum"]/pareto[metric].sum()
-
-                fig = px.line(pareto,y="Share")
-
-                st.plotly_chart(fig,use_container_width=True)
-
-
-        # ---------------------------------------------
-        # SEGMENTATION
-        # ---------------------------------------------
-
-        with tabs[3]:
-
-            if customer_col != "None":
+                # ---------------------------------
+                # SEGMENTATION
+                # ---------------------------------
 
                 seg = (
                     df.groupby(customer_col)[metric]
@@ -496,20 +456,21 @@ with right:
                     .reset_index()
                 )
 
-                fig = px.pie(
+                fig4 = px.pie(
                     pie,
                     names="Segment",
-                    values=metric
+                    values=metric,
+                    title="Customer Segmentation"
                 )
 
-                st.plotly_chart(fig)
+                st.plotly_chart(fig4,use_container_width=True)
 
 
-        # ---------------------------------------------
-        # COHORT HEATMAP
-        # ---------------------------------------------
+# ---------------------------------------------------------
+# COHORT ANALYTICS
+# ---------------------------------------------------------
 
-        with tabs[4]:
+        with tabs[1]:
 
             if customer_col!="None" and date_col!="None":
 
@@ -537,39 +498,33 @@ with right:
                 fig = px.imshow(
                     pivot,
                     text_auto=True,
-                    color_continuous_scale="Blues"
+                    color_continuous_scale="Blues",
+                    title="Cohort Heatmap"
                 )
 
                 st.plotly_chart(fig,use_container_width=True)
 
-
-        # ---------------------------------------------
-        # RETENTION
-        # ---------------------------------------------
-
-        with tabs[5]:
-
-            if customer_col!="None" and date_col!="None":
 
                 retention = pivot.divide(
                     pivot.iloc[:,0],
                     axis=0
                 )
 
-                fig = px.imshow(
+                fig2 = px.imshow(
                     retention,
                     text_auto=".0%",
-                    color_continuous_scale="Greens"
+                    color_continuous_scale="Greens",
+                    title="Retention %"
                 )
 
-                st.plotly_chart(fig,use_container_width=True)
+                st.plotly_chart(fig2,use_container_width=True)
 
 
-        # ---------------------------------------------
-        # OUTPUT
-        # ---------------------------------------------
+# ---------------------------------------------------------
+# OUTPUT
+# ---------------------------------------------------------
 
-        with tabs[6]:
+        with tabs[2]:
 
             st.dataframe(result)
 
