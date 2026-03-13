@@ -1,431 +1,411 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
-from datetime import datetime
-from supabase import create_client
 
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
-# ---------------- CONFIG ---------------- #
+# ------------------------------------------------
+# SESSION
+# ------------------------------------------------
 
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL","")
+if "premium" not in st.session_state:
+    st.session_state.premium = True   # change to False if needed
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+if "result" not in st.session_state:
+    st.session_state.result = None
 
-# ---------------- SESSION ---------------- #
+# ------------------------------------------------
+# SIDEBAR MODULES
+# ------------------------------------------------
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+st.sidebar.title("Analytics Modules")
 
-if "user_email" not in st.session_state:
-    st.session_state.user_email = None
+module = st.sidebar.radio(
+    "Select Module",
+    [
+        "Cohort Analytics",
+        "Customer Analytics",
+        "Product Bundling",
+        "ACV Analysis",
+        "Revenue Concentration"
+    ]
+)
 
-if "subscribed" not in st.session_state:
-    st.session_state.subscribed = False
+# ------------------------------------------------
+# COMING SOON MODULES
+# ------------------------------------------------
 
-if "run_paid" not in st.session_state:
-    st.session_state.run_paid = False
+if module != "Cohort Analytics":
 
+    st.title(module)
 
-# ---------------- FILE LOADER ---------------- #
+    st.markdown(
+        """
+        <h1 style='text-align:center;
+        color:#7C3AED;
+        font-size:80px;
+        margin-top:200px;'>
+        Coming Soon 🚀
+        </h1>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.stop()
+
+# ------------------------------------------------
+# FILE LOADER
+# ------------------------------------------------
 
 def load_file(uploaded_file):
 
-    uploaded_file.seek(0)
-
     if uploaded_file.name.endswith(".csv"):
-
         try:
-            df = pd.read_csv(uploaded_file,encoding="utf-8",header=0)
+            df = pd.read_csv(uploaded_file, header=0, encoding="utf-8")
         except:
             uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file,encoding="latin1",header=0)
+            df = pd.read_csv(uploaded_file, header=0, encoding="latin1")
 
     else:
-
-        uploaded_file.seek(0)
-        df = pd.read_excel(uploaded_file,header=0)
+        df = pd.read_excel(uploaded_file)
 
     df.columns = df.columns.str.strip()
 
     return df
 
 
-# ---------------- SIGNUP ---------------- #
+# ------------------------------------------------
+# COHORT ENGINE
+# ------------------------------------------------
 
-def signup():
+def cohort_engine(df, metric, individual_cols, hierarchies, rank_flag, pct_flag, rev_flag):
 
-    st.subheader("Create Account")
+    result = df.copy()
 
-    email = st.text_input("Email")
-    password = st.text_input("Password",type="password")
+    def clean(cols):
+        return "_".join(cols)
 
-    if st.button("Signup"):
+    def cohort_calc(cols):
 
-        try:
+        temp = (
+            df.groupby(cols)[metric]
+            .sum()
+            .reset_index()
+            .sort_values(metric, ascending=False)
+        )
 
-            supabase.table("users").insert({
+        temp["Rank"] = temp[metric].rank(method="dense", ascending=False)
 
-                "email":email,
-                "password":password,
-                "subscribed": email==ADMIN_EMAIL,
-                "created_at":datetime.now().isoformat()
+        max_rank = temp["Rank"].max()
 
-            }).execute()
+        outputs = {}
 
-            st.success("Account created. Please login")
+        name = clean(cols)
 
-        except:
+        if rank_flag:
 
-            st.error("Signup failed")
+            def bucket(x):
+                if x <= 10:
+                    return "Top 10"
+                elif x <= 25:
+                    return "11-25"
+                elif x <= 50:
+                    return "26-50"
+                else:
+                    return "Others"
 
+            outputs[f"SG_{name}"] = temp["Rank"].apply(bucket)
 
-# ---------------- LOGIN ---------------- #
+        if pct_flag:
 
-def login():
+            temp["Pct"] = temp["Rank"] / max_rank
 
-    st.subheader("Login")
+            def bucket(x):
+                if x <= .05:
+                    return "Top 5%"
+                elif x <= .10:
+                    return "Top 10%"
+                elif x <= .20:
+                    return "Top 20%"
+                elif x <= .50:
+                    return "Top 50%"
+                else:
+                    return "Bottom 50%"
 
-    email = st.text_input("Email")
-    password = st.text_input("Password",type="password")
+            outputs[f"PC_{name}"] = temp["Pct"].apply(bucket)
 
-    if st.button("Login"):
+        if rev_flag:
 
-        user = supabase.table("users")\
-            .select("*")\
-            .eq("email",email)\
-            .eq("password",password)\
-            .execute()
+            temp["Cum"] = temp[metric].cumsum()
+            total = temp[metric].sum()
 
-        if len(user.data)>0:
+            temp["Share"] = temp["Cum"] / total
 
-            st.session_state.logged_in=True
-            st.session_state.user_email=email
-            st.session_state.subscribed=user.data[0]["subscribed"]
+            def bucket(x):
+                if x <= .2:
+                    return "Top Drivers"
+                elif x <= .5:
+                    return "Mid Tier"
+                elif x <= .8:
+                    return "Long Tail"
+                else:
+                    return "Bottom Tail"
 
-            if email==ADMIN_EMAIL:
-                st.session_state.subscribed=True
+            outputs[f"RC_{name}"] = temp["Share"].apply(bucket)
 
-            supabase.table("login_logs").insert({
+        return temp, outputs
 
-                "email":email,
-                "login_time":datetime.now().isoformat()
 
-            }).execute()
+    # --------------------------
+    # INDIVIDUAL COHORTS
+    # --------------------------
 
-            st.rerun()
+    for col in individual_cols:
 
-        else:
+        temp, outputs = cohort_calc([col])
 
-            st.error("Invalid login")
+        for name, val in outputs.items():
 
+            temp[name] = val
 
-# ---------------- LOGIN PAGE ---------------- #
+            result = result.merge(
+                temp[[col, name]],
+                on=col,
+                how="left"
+            )
 
-def auth_page():
 
-    st.title("Analytics Engine")
+    # --------------------------
+    # HIERARCHICAL COHORTS
+    # --------------------------
 
-    st.markdown("### Subscription Model")
+    for group in hierarchies:
 
-    col1,col2=st.columns(2)
+        temp, outputs = cohort_calc(group)
 
-    with col1:
+        for name, val in outputs.items():
 
-        st.markdown("### Free User")
+            temp[name] = val
 
-        st.write("""
-Run analytics  
-View results  
-Cannot download  
-""")
+            result = result.merge(
+                temp[group + [name]],
+                on=group,
+                how="left"
+            )
 
-    with col2:
 
-        st.markdown("### Premium User")
+    cohort_cols = [
+        c for c in result.columns
+        if c.startswith(("SG_", "PC_", "RC_"))
+    ]
 
-        st.write("""
-One time subscription: $25  
-Download outputs  
-Then $10 per run
-""")
+    result[cohort_cols] = result[cohort_cols].fillna("Others")
 
-    option=st.radio("Select Option",["Login","Signup"])
+    return result
 
-    if option=="Login":
-        login()
-    else:
-        signup()
 
+# ------------------------------------------------
+# MAIN LAYOUT
+# ------------------------------------------------
 
-# ---------------- SUBSCRIPTION ---------------- #
+st.title("Cohort Analytics Engine")
 
-def subscription_section():
+left, right = st.columns([1, 1.5])
 
-    if not st.session_state.subscribed:
+# ------------------------------------------------
+# LEFT PANEL
+# ------------------------------------------------
 
-        st.warning("One-time subscription required ($25)")
+with left:
 
-        if st.button("Activate Subscription"):
+    st.subheader("Upload & Configure")
 
-            supabase.table("users")\
-                .update({"subscribed":True})\
-                .eq("email",st.session_state.user_email)\
-                .execute()
-
-            st.session_state.subscribed=True
-
-            st.success("Subscription activated")
-
-    else:
-
-        st.success("Subscription active")
-
-
-# ---------------- RUN PAYMENT ---------------- #
-
-def run_payment():
-
-    if st.session_state.user_email==ADMIN_EMAIL:
-        return True
-
-    if not st.session_state.run_paid:
-
-        st.warning("Each run costs $10")
-
-        if st.button("Pay $10 for this run"):
-
-            supabase.table("run_payments").insert({
-
-                "email":st.session_state.user_email,
-                "amount":10,
-                "created_at":datetime.now().isoformat()
-
-            }).execute()
-
-            st.session_state.run_paid=True
-
-            st.success("Run unlocked")
-
-    return st.session_state.run_paid
-
-
-# ---------------- COHORT ENGINE ---------------- #
-
-def cohort_engine():
-
-    st.title("Cohort Analytics Engine")
-
-    subscription_section()
-
-    uploaded_file=st.file_uploader("Upload CSV or Excel",type=["csv","xlsx"])
+    uploaded_file = st.file_uploader(
+        "Upload CSV or Excel",
+        type=["csv", "xlsx"]
+    )
 
     if uploaded_file:
 
-        df=load_file(uploaded_file)
+        df = load_file(uploaded_file)
 
         st.success("File Loaded Successfully")
 
-        columns=df.columns.tolist()
+        columns = df.columns.tolist()
 
-        metric=st.selectbox("Metric Column",columns)
-
-        df[metric]=pd.to_numeric(df[metric],errors="coerce")
-
-        period_col=st.selectbox("Period Column",["None"]+columns)
-
-        if period_col!="None":
-
-            periods=sorted(df[period_col].dropna().unique())
-
-            logic=st.radio("Period Logic",["Latest Period","Select Periods","All Periods"])
-
-            if logic=="Latest Period":
-
-                latest=max(periods)
-                df=df[df[period_col]==latest]
-
-            elif logic=="Select Periods":
-
-                selected=st.multiselect("Choose Periods",periods)
-
-                if selected:
-                    df=df[df[period_col].isin(selected)]
+        metric = st.selectbox(
+            "Metric Column",
+            columns
+        )
 
         st.subheader("Individual Cohorts")
 
-        individual_cols=st.multiselect("Select Columns",columns)
+        individual_cols = st.multiselect(
+            "Select Columns",
+            columns
+        )
 
         st.subheader("Hierarchical Cohorts")
 
-        hierarchy_count=st.number_input("Number of Hierarchies",0,10,0)
+        hierarchy_count = st.number_input(
+            "Number of Hierarchies",
+            0, 10, 0
+        )
 
-        hierarchies=[]
+        hierarchies = []
 
         for i in range(hierarchy_count):
 
-            cols=st.multiselect(f"Hierarchy {i+1}",columns,key=i)
+            cols = st.multiselect(
+                f"Hierarchy {i+1}",
+                columns,
+                key=i
+            )
 
             if cols:
                 hierarchies.append(cols)
 
-        st.sidebar.subheader("Cohort Types")
+        st.subheader("Cohort Types")
 
-        rank_flag=st.sidebar.checkbox("Size Group (SG_)")
-        pct_flag=st.sidebar.checkbox("Percentile (PC_)")
-        rev_flag=st.sidebar.checkbox("Revenue Contribution (RC_)")
+        rank_flag = st.checkbox("Size Group (SG_)")
+        pct_flag = st.checkbox("Percentile (PC_)")
+        rev_flag = st.checkbox("Revenue Contribution (RC_)")
 
         if st.button("Generate Cohorts"):
 
-            result=df.copy()
+            result = cohort_engine(
+                df,
+                metric,
+                individual_cols,
+                hierarchies,
+                rank_flag,
+                pct_flag,
+                rev_flag
+            )
 
-            def clean(cols):
-                return "_".join(cols)
+            st.session_state.result = result
+            st.session_state.df = df
+            st.session_state.metric = metric
 
-            def cohort_calc(cols):
 
-                temp=df.groupby(cols)[metric].sum().reset_index()
+# ------------------------------------------------
+# RIGHT PANEL
+# ------------------------------------------------
 
-                temp=temp.sort_values(metric,ascending=False)
+with right:
 
-                temp["Rank"]=temp[metric].rank(method="dense",ascending=False)
+    st.subheader("Cohort Analytics")
 
-                max_rank=temp["Rank"].max()
+    if st.session_state.result is not None:
 
-                outputs={}
-                name=clean(cols)
+        result = st.session_state.result
+        df = st.session_state.df
+        metric = st.session_state.metric
 
-                if rank_flag:
+        tabs = st.tabs(
+            [
+                "Summary",
+                "Charts",
+                "Cohort Heatmap",
+                "Output"
+            ]
+        )
 
-                    def bucket(x):
+        # ------------------------------------
+        # SUMMARY
+        # ------------------------------------
 
-                        if x<=10:return"Top 10"
-                        elif x<=25:return"11-25"
-                        elif x<=50:return"26-50"
-                        else:return"Others"
+        with tabs[0]:
 
-                    outputs[f"SG_{name}"]=temp["Rank"].apply(bucket)
+            c1, c2, c3 = st.columns(3)
 
-                if pct_flag:
+            c1.metric("Rows", len(result))
 
-                    temp["Pct"]=temp["Rank"]/max_rank
+            cohort_cols = [
+                c for c in result.columns
+                if c.startswith(("SG_", "PC_", "RC_"))
+            ]
 
-                    def bucket(x):
+            c2.metric("Cohort Columns", len(cohort_cols))
 
-                        if x<=.05:return"Top 5%"
-                        elif x<=.10:return"Top 10%"
-                        elif x<=.20:return"Top 20%"
-                        elif x<=.50:return"Top 50%"
-                        else:return"Bottom 50%"
+            c3.metric("Metric Total", round(df[metric].sum(), 2))
 
-                    outputs[f"PC_{name}"]=temp["Pct"].apply(bucket)
 
-                if rev_flag:
+        # ------------------------------------
+        # CHARTS
+        # ------------------------------------
 
-                    temp["Cum"]=temp[metric].cumsum()
+        with tabs[1]:
 
-                    total=temp[metric].sum()
+            if len(df.columns) > 0:
 
-                    temp["Share"]=temp["Cum"]/total
+                group_col = df.columns[0]
 
-                    def bucket(x):
+                chart_df = (
+                    df.groupby(group_col)[metric]
+                    .sum()
+                    .reset_index()
+                    .sort_values(metric, ascending=False)
+                )
 
-                        if x<=.2:return"Top Drivers"
-                        elif x<=.5:return"Mid Tier"
-                        elif x<=.8:return"Long Tail"
-                        else:return"Bottom Tail"
+                fig = px.bar(
+                    chart_df.head(15),
+                    x=group_col,
+                    y=metric
+                )
 
-                    outputs[f"RC_{name}"]=temp["Share"].apply(bucket)
+                st.plotly_chart(fig, use_container_width=True)
 
-                return temp,outputs
 
-            for col in individual_cols:
+        # ------------------------------------
+        # HEATMAP
+        # ------------------------------------
 
-                temp,outputs=cohort_calc([col])
+        with tabs[2]:
 
-                for name,val in outputs.items():
+            cohort_cols = [
+                c for c in result.columns
+                if c.startswith(("SG_", "PC_", "RC_"))
+            ]
 
-                    temp[name]=val
+            if cohort_cols:
 
-                    result=result.merge(temp[[col,name]],on=col,how="left")
+                heat = (
+                    result.groupby(cohort_cols[0])[metric]
+                    .sum()
+                    .reset_index()
+                )
 
-            for group in hierarchies:
+                fig = px.bar(
+                    heat,
+                    x=cohort_cols[0],
+                    y=metric
+                )
 
-                temp,outputs=cohort_calc(group)
+                st.plotly_chart(fig, use_container_width=True)
 
-                for name,val in outputs.items():
 
-                    temp[name]=val
+        # ------------------------------------
+        # OUTPUT
+        # ------------------------------------
 
-                    result=result.merge(temp[group+[name]],on=group,how="left")
-
-            cohort_cols=[c for c in result.columns if c.startswith(("SG_","PC_","RC_"))]
-
-            result[cohort_cols]=result[cohort_cols].fillna("Others")
-
-            st.subheader("Analytics Dashboard")
-
-            col1,col2,col3=st.columns(3)
-
-            col1.metric("Rows",len(result))
-            col2.metric("Cohort Columns",len(cohort_cols))
-            col3.metric("Metric Total",round(df[metric].sum(),2))
+        with tabs[3]:
 
             st.dataframe(result)
 
-            if run_payment():
+            csv = result.to_csv(index=False)
 
-                csv=result.to_csv(index=False)
+            if st.session_state.premium:
 
-                st.download_button("Download Output",csv,"cohort_output.csv")
+                st.download_button(
+                    "Download Output",
+                    csv,
+                    "cohort_output.csv"
+                )
 
+            else:
 
-# ---------------- ADMIN DASHBOARD ---------------- #
-
-def admin_dashboard():
-
-    st.title("Admin Dashboard")
-
-    users=supabase.table("users").select("*").execute()
-
-    st.subheader("Users")
-
-    if users.data:
-        st.dataframe(pd.DataFrame(users.data))
-
-    logs=supabase.table("login_logs").select("*").execute()
-
-    st.subheader("Login Logs")
-
-    if logs.data:
-        st.dataframe(pd.DataFrame(logs.data))
-
-
-# ---------------- MAIN ROUTER ---------------- #
-
-if not st.session_state.logged_in:
-
-    auth_page()
-
-else:
-
-    st.sidebar.title("Navigation")
-
-    pages=["Cohort Analytics Engine"]
-
-    if st.session_state.user_email==ADMIN_EMAIL:
-        pages.append("Admin Dashboard")
-
-    nav=st.sidebar.radio("Select Page",pages)
-
-    st.sidebar.write(f"Logged in as: {st.session_state.user_email}")
-
-    if nav=="Admin Dashboard":
-
-        admin_dashboard()
-
-    else:
-
-        cohort_engine()
+                st.warning(
+                    "Please subscribe to download output."
+                )
