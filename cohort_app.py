@@ -30,7 +30,6 @@ if "user_email" not in st.session_state:
 if "premium" not in st.session_state:
     st.session_state.premium = False
 
-
 # -------------------------
 # SIGNUP
 # -------------------------
@@ -44,14 +43,29 @@ def signup():
 
     if st.button("Signup"):
 
-        supabase.table("users").insert({
-            "email": email,
-            "password": password,
-            "premium": False,
-            "created_at": str(datetime.now())
-        }).execute()
+        if email == "" or password == "":
+            st.warning("Please enter email and password")
+            return
 
-        st.success("Account created. Please login.")
+        try:
+
+            existing = supabase.table("users").select("email").eq("email", email).execute()
+
+            if len(existing.data) > 0:
+                st.warning("User already exists")
+                return
+
+            supabase.table("users").insert({
+                "email": email,
+                "password": password,
+                "premium": False,
+                "created_at": datetime.now().isoformat()
+            }).execute()
+
+            st.success("Account created. Please login.")
+
+        except Exception as e:
+            st.error("Signup failed")
 
 
 # -------------------------
@@ -67,28 +81,36 @@ def login():
 
     if st.button("Login"):
 
-        user = supabase.table("users")\
-            .select("*")\
-            .eq("email", email)\
-            .eq("password", password)\
-            .execute()
+        try:
 
-        if len(user.data) > 0:
+            user = supabase.table("users")\
+                .select("*")\
+                .eq("email", email)\
+                .eq("password", password)\
+                .execute()
 
-            st.session_state.logged_in = True
-            st.session_state.user_email = email
-            st.session_state.premium = user.data[0]["premium"]
+            if len(user.data) > 0:
 
-            supabase.table("login_logs").insert({
-                "email": email,
-                "login_time": str(datetime.now())
-            }).execute()
+                st.session_state.logged_in = True
+                st.session_state.user_email = email
+                st.session_state.premium = user.data[0]["premium"]
 
-            st.rerun()
+                try:
+                    supabase.table("login_logs").insert({
+                        "email": email,
+                        "login_time": datetime.now().isoformat()
+                    }).execute()
+                except:
+                    pass
 
-        else:
+                st.rerun()
 
-            st.error("Invalid login")
+            else:
+
+                st.error("Invalid login")
+
+        except Exception as e:
+            st.error("Login failed")
 
 
 # -------------------------
@@ -126,14 +148,23 @@ def payment_gate():
 
     if st.button("Submit Payment"):
 
-        supabase.table("payments").insert({
-            "email": st.session_state.user_email,
-            "upi_txn": txn,
-            "amount": 25,
-            "verified": False
-        }).execute()
+        if txn == "":
+            st.warning("Please enter transaction ID")
+            return
 
-        st.success("Payment submitted. Waiting verification.")
+        try:
+
+            supabase.table("payments").insert({
+                "email": st.session_state.user_email,
+                "upi_txn": txn,
+                "amount": 25,
+                "verified": False
+            }).execute()
+
+            st.success("Payment submitted. Waiting verification.")
+
+        except:
+            st.error("Payment submission failed")
 
 
 # -------------------------
@@ -142,20 +173,27 @@ def payment_gate():
 
 def load_file(uploaded_file):
 
-    if uploaded_file.name.endswith(".csv"):
+    try:
 
-        try:
-            df = pd.read_csv(uploaded_file, header=0, encoding="utf-8")
-        except:
-            df = pd.read_csv(uploaded_file, header=0, encoding="latin1")
+        if uploaded_file.name.endswith(".csv"):
 
-    elif uploaded_file.name.endswith(".xlsx"):
+            try:
+                df = pd.read_csv(uploaded_file, encoding="utf-8", header=0)
+            except:
+                df = pd.read_csv(uploaded_file, encoding="latin1", header=0)
 
-        df = pd.read_excel(uploaded_file)
+        elif uploaded_file.name.endswith(".xlsx"):
 
-    df.columns = df.columns.str.strip()
+            df = pd.read_excel(uploaded_file)
 
-    return df
+        df.columns = df.columns.str.strip()
+
+        return df
+
+    except:
+
+        st.error("File could not be read")
+        return None
 
 
 # -------------------------
@@ -175,21 +213,20 @@ def cohort_engine():
 
         df = load_file(uploaded_file)
 
+        if df is None:
+            return
+
         st.success("File Loaded Successfully")
 
         st.dataframe(df.head())
 
         columns = df.columns.tolist()
 
-        metric = st.selectbox(
-            "Metric Column",
-            columns
-        )
+        metric = st.selectbox("Metric Column", columns)
 
-        period_col = st.selectbox(
-            "Period Column",
-            ["None"] + columns
-        )
+        df[metric] = pd.to_numeric(df[metric], errors="coerce")
+
+        period_col = st.selectbox("Period Column", ["None"] + columns)
 
         if period_col != "None":
 
@@ -207,36 +244,24 @@ def cohort_engine():
 
             elif logic == "Select Periods":
 
-                selected = st.multiselect(
-                    "Choose Periods",
-                    periods
-                )
+                selected = st.multiselect("Choose Periods", periods)
 
-                df = df[df[period_col].isin(selected)]
+                if selected:
+                    df = df[df[period_col].isin(selected)]
 
         st.subheader("Individual Cohorts")
 
-        individual_cols = st.multiselect(
-            "Select Columns",
-            columns
-        )
+        individual_cols = st.multiselect("Select Columns", columns)
 
         st.subheader("Hierarchical Cohorts")
 
-        hierarchy_count = st.number_input(
-            "Number of Hierarchies",
-            0, 10, 0
-        )
+        hierarchy_count = st.number_input("Number of Hierarchies", 0, 10, 0)
 
         hierarchies = []
 
         for i in range(hierarchy_count):
 
-            cols = st.multiselect(
-                f"Hierarchy {i+1}",
-                columns,
-                key=i
-            )
+            cols = st.multiselect(f"Hierarchy {i+1}", columns, key=i)
 
             if cols:
                 hierarchies.append(cols)
@@ -248,6 +273,10 @@ def cohort_engine():
         rev_flag = st.sidebar.checkbox("Revenue Contribution (RC_)")
 
         if st.button("Generate Cohorts"):
+
+            if not rank_flag and not pct_flag and not rev_flag:
+                st.warning("Select at least one cohort type")
+                return
 
             result = df.copy()
 
