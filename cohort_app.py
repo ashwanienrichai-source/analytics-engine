@@ -105,28 +105,76 @@ if not st.session_state.authenticated:
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     html, body, [class*="css"] { font-family:'Inter',sans-serif; }
     #MainMenu{visibility:hidden;} footer{visibility:hidden;} header{visibility:hidden;}
-    .stApp { background:#FFFFFF; }
+
+    /* Make entire app background match the split */
+    .stApp { background:#0047AB; }
     [data-testid="stSidebar"] { display:none !important; }
-    .block-container { padding:0 !important; max-width:100% !important; }
+
+    /* Remove ALL padding/margin from Streamlit wrapper so our layout fills viewport */
+    .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+    }
+    section[data-testid="stMain"] > div {
+        padding: 0 !important;
+    }
+
+    /* Force the two columns to be exactly 50/50 and full viewport height */
+    [data-testid="stHorizontalBlock"] {
+        gap: 0 !important;
+        align-items: stretch !important;
+        min-height: 100vh !important;
+    }
+    [data-testid="stHorizontalBlock"] > div:first-child {
+        flex: 0 0 57% !important;
+        max-width: 57% !important;
+        padding: 0 !important;
+        min-height: 100vh !important;
+    }
+    [data-testid="stHorizontalBlock"] > div:last-child {
+        flex: 0 0 43% !important;
+        max-width: 43% !important;
+        padding: 0 !important;
+        min-height: 100vh !important;
+        background: #FFFFFF;
+    }
+    /* Remove inner element padding */
+    [data-testid="stHorizontalBlock"] > div > div {
+        padding: 0 !important;
+        height: 100% !important;
+    }
+
+    /* Input styling */
     .stTextInput input {
         background:#F8F9FC !important; border:1.5px solid #E2E6EF !important;
         border-radius:8px !important; color:#1A1D23 !important;
         font-size:14px !important; padding:10px 14px !important;
     }
-    .stTextInput input:focus { border-color:#0047AB !important; }
-    .stTextInput label { color:#5A6478 !important; font-size:12px !important; font-weight:600 !important; }
+    .stTextInput input:focus { border-color:#0047AB !important; box-shadow:0 0 0 3px rgba(0,71,171,0.08) !important; }
+    .stTextInput label { color:#5A6478 !important; font-size:12px !important; font-weight:600 !important; letter-spacing:0.02em !important; }
+    /* Sign in button */
     .stButton > button {
         background:#0047AB !important; color:#FFFFFF !important;
         border:none !important; border-radius:8px !important;
         font-weight:600 !important; font-size:14px !important;
-        padding:11px 24px !important; width:100% !important;
-        transition:background 0.15s !important;
+        padding:12px 24px !important; width:100% !important;
+        transition:background 0.15s, box-shadow 0.15s !important;
+        letter-spacing:0.01em !important;
     }
-    .stButton > button:hover { background:#003899 !important; }
+    .stButton > button:hover { background:#003899 !important; box-shadow:0 4px 14px rgba(0,71,171,0.25) !important; }
+    /* Guest button — secondary style */
+    div[data-testid="column"]:last-child .stButton:last-of-type > button {
+        background:#F8F9FC !important; color:#0047AB !important;
+        border:1.5px solid #BFDBFE !important;
+    }
+    div[data-testid="column"]:last-child .stButton:last-of-type > button:hover {
+        background:#EFF6FF !important; box-shadow:none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-    lcol, rcol = st.columns([13, 10], gap="small")
+    lcol, rcol = st.columns([57, 43], gap="small")
 
     with lcol:
         st.markdown("""
@@ -268,10 +316,8 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
 
     with rcol:
-        # Use padding to vertically center the form
         st.markdown("""
-        <div style="min-height:100vh;background:#FFFFFF;padding:52px 44px;
-                    display:flex;flex-direction:column;justify-content:center;">
+        <div style="background:#FFFFFF;min-height:100vh;padding:56px 48px 40px 48px;">
         """, unsafe_allow_html=True)
 
         st.markdown("""
@@ -1144,36 +1190,111 @@ with right:
                 else:
                     st.info("No bridge data available for the selected filters.")
 
-            # ── Tab 5: Output ────────────────────────────────────────────
+            # ── Tab 5: Output (Alteryx-matching schema) ─────────────────
             with tab5:
-                drop_pfx = ("Prior_","Cum","Share","Pct","Past_","Future_","Expiry_","DTE","Lookback_Date","_k","Min_Date","Max_Date","Grid_End")
-                out_cols = [c for c in master.columns if not any(c.startswith(p) for p in drop_pfx)]
-                out_df   = master[out_cols].copy()
-                st.markdown(f'<div class="section-hdr">{len(out_df):,} rows — master analytics table</div>', unsafe_allow_html=True)
-                st.dataframe(out_df, use_container_width=True, height=420)
                 is_admin = st.session_state.user_email.lower() == ADMIN_EMAIL.lower()
+                m_out    = st.session_state.mapping
 
-                # CSV
+                # ── Build the Alteryx-matching output table ──────────────
+                # Schema: Customer, Product, Channel, Region, Vintage, Date,
+                #         MRR or ARR, Quantity, Month Lookback, DTE,
+                #         Lookback Date, Bridge Classification, Bridge Value
+                keep_cols_map = {
+                    m_out["customer_col"]:  "Customer",
+                }
+                if m_out["product_col"] != "None":   keep_cols_map[m_out["product_col"]] = "Product"
+                if m_out["channel_col"] != "None":   keep_cols_map[m_out["channel_col"]] = "Channel"
+                if m_out["region_col"]  != "None":   keep_cols_map[m_out["region_col"]]  = "Region"
+
+                # Columns that come from the engine with consistent names
+                engine_cols = {
+                    "Vintage":       "Vintage",
+                    m_out["date_col"]: "Date",
+                    m_out["metric"]:  "MRR or ARR",
+                }
+                if m_out["qty_col"] != "None": engine_cols[m_out["qty_col"]] = "Quantity"
+                engine_cols["Lookback"]       = "Month Lookback"
+                engine_cols["DTE"]            = "DTE"
+                engine_cols["Lookback_Date"]  = "Lookback Date"
+                engine_cols["Bridge"]         = "Bridge Classification"
+                engine_cols["Bridge_Value"]   = "Bridge Value"
+
+                all_map = {**keep_cols_map, **engine_cols}
+
+                # Filter to columns that actually exist in master
+                avail = {k: v for k, v in all_map.items() if k in master.columns}
+                out_df = master[list(avail.keys())].copy()
+                out_df = out_df.rename(columns=avail)
+
+                # Apply year filter
+                if sel_year != "All":
+                    out_df = out_df[pd.to_datetime(out_df["Date"]).dt.year == int(sel_year)]
+
+                # Remove "No Change" rows for cleaner output
+                if "Bridge Classification" in out_df.columns:
+                    out_df = out_df[out_df["Bridge Classification"] != "No Change"]
+
+                # Sort: Customer → Date → Month Lookback
+                sort_cols = [c for c in ["Customer","Date","Month Lookback"] if c in out_df.columns]
+                if sort_cols: out_df = out_df.sort_values(sort_cols)
+
+                total_rows = len(out_df)
+                st.markdown(
+                    f'<div class="section-hdr">{total_rows:,} rows · {out_df["Bridge Classification"].nunique() if "Bridge Classification" in out_df.columns else 0} bridge categories · Lookback {sel_lb}M{" · " + sel_year if sel_year != "All" else ""}</div>',
+                    unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style="font-size:12px;color:#5A6478;margin-bottom:10px;line-height:1.5;">
+                  Output schema matches Alteryx final Select tool output:
+                  <strong>Customer · Product · Channel · Region · Vintage · Date · MRR or ARR ·
+                  Quantity · Month Lookback · DTE · Lookback Date · Bridge Classification · Bridge Value</strong>
+                </div>""", unsafe_allow_html=True)
+
+                # Colour-code by Bridge Classification
+                def colour_bridge(val):
+                    colours = {
+                        "New Logo":      "color:#15803D;font-weight:600",
+                        "Cross Sell":    "color:#1D4ED8;font-weight:600",
+                        "Other In":      "color:#16A34A",
+                        "Returning":     "color:#B45309;font-weight:600",
+                        "Upsell":        "color:#2563EB",
+                        "Downsell":      "color:#EA580C;font-weight:600",
+                        "Churn":         "color:#DC2626;font-weight:700",
+                        "Partial Churn": "color:#EF4444",
+                        "Lapsed":        "color:#6B7280",
+                        "Beginning MRR or ARR": "color:#1E3A5F;font-weight:700",
+                        "Ending MRR or ARR":    "color:#1E3A5F;font-weight:700",
+                    }
+                    return colours.get(val, "")
+
+                st.dataframe(out_df, use_container_width=True, height=460)
+
                 csv_out = out_df.to_csv(index=False)
                 if is_admin:
-                    st.download_button("⬇  Download CSV", csv_out, "customer_analytics_output.csv", use_container_width=True)
+                    c_dl1, c_dl2 = st.columns(2)
+                    with c_dl1:
+                        st.download_button("⬇  Download CSV (Alteryx format)",
+                                           csv_out, "arr_bridge_output.csv",
+                                           use_container_width=True)
+                    with c_dl2:
+                        # Excel with 3 sheets: master output, waterfall, customer detail
+                        wtab_dl = make_arr_waterfall_table(master, metric, date_col, sel_lb, sel_year)
+                        cust_dl = make_customer_bridge_table(master, metric, date_col, customer_col, sel_lb, sel_year)
+                        buf = io.BytesIO()
+                        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                            out_df.to_excel(writer, sheet_name="Bridge Output", index=False)
+                            if not wtab_dl.empty:
+                                wtab_dl.to_excel(writer, sheet_name="ARR Waterfall")
+                            if not cust_dl.empty:
+                                cust_dl.to_excel(writer, sheet_name="Customer Detail", index=False)
+                        buf.seek(0)
+                        st.download_button("⬇  Download Excel (3 sheets)",
+                                           buf.getvalue(), "arr_bridge_output.xlsx",
+                                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                           use_container_width=True)
                 else:
-                    st.download_button("⬇  Download CSV", csv_out, disabled=True, use_container_width=True)
+                    st.download_button("⬇  Download Output", csv_out, disabled=True, use_container_width=True)
                     st.warning("🔒 Download available for subscribed users. Subscribe for $25/year.")
-
-                # Also offer waterfall table download
-                wtab_dl = make_arr_waterfall_table(master, metric, date_col, sel_lb, sel_year)
-                if not wtab_dl.empty and is_admin:
-                    buf = io.BytesIO()
-                    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                        wtab_dl.to_excel(writer, sheet_name="ARR Waterfall")
-                        out_df.to_excel(writer, sheet_name="Master Data", index=False)
-                    buf.seek(0)
-                    st.download_button("⬇  Download Excel (Waterfall + Data)",
-                                       buf.getvalue(),
-                                       "arr_bridge_output.xlsx",
-                                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                       use_container_width=True)
 
         elif st.session_state.validated_df is None:
             st.markdown('<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;text-align:center;"><div style="font-size:48px;margin-bottom:16px;">📈</div><div style="font-size:18px;font-weight:600;color:#1A1D23;margin-bottom:8px;">Upload your dataset to begin</div><div style="font-size:13px;color:#8C95A6;">Map columns and click Validate Data</div></div>', unsafe_allow_html=True)
