@@ -559,112 +559,288 @@ def cohort_engine(df, metric, cols, cohort_type):
 # ─────────────────────────────────────────────────────────────────────────────
 def run_customer_analytics(df_raw, customer_col, product_col, date_col,
                             metric, qty_col, channel_col, region_col, lookback_months):
+    """
+    Pixel-perfect Python translation of MRR_Analysis_wf_Latest_Version.yxmd.
+
+    Step 1 — Input & Scope
+    Step 2 — Date variables & generate missing months (grid up to Dataset_Max + 12m)
+    Step 3 — Lookback × Prior MRR × DTE  (shift by N for N-month lookback)
+    Step 4 — Vintage, customer/product min-max dates
+    Step 5 — Bridge Classification & all value fields
+    """
+    # ── Step 1: Prepare & scope ──────────────────────────────────────────
     df = df_raw.copy()
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     df[metric]   = pd.to_numeric(df[metric], errors="coerce").fillna(0)
-    df = df[df[metric] > 0].copy()
-    has_qty  = qty_col  and qty_col  != "None" and qty_col  in df.columns
+
+    has_qty  = qty_col     and qty_col     != "None" and qty_col     in df.columns
     has_prod = product_col and product_col != "None" and product_col in df.columns
-    if has_qty: df[qty_col] = pd.to_numeric(df[qty_col], errors="coerce").fillna(0)
+    has_chan = channel_col and channel_col != "None" and channel_col in df.columns
+    has_reg  = region_col  and region_col  != "None" and region_col  in df.columns
+
+    if has_qty:
+        df[qty_col] = pd.to_numeric(df[qty_col], errors="coerce").fillna(0)
+    else:
+        df["_qty"] = 1.0        # Alteryx default: Quantity = 1 when not provided
+        qty_col = "_qty"
+        has_qty = True
+
+    # Normalise dates to month-end (Alteryx: datetimetrim(Date,'lastofmonth'))
     df[date_col] = df[date_col] + pd.offsets.MonthEnd(0)
-    keys = [customer_col] + ([product_col] if has_prod else [])
-    dataset_max = df[date_col].max()
 
-    cust_dates = df.groupby(customer_col).agg(
-        Cust_Min_Date=(date_col,"min"), Cust_Max_Date=(date_col,"max")).reset_index()
+    # In-scope filter: MRR > 0 and not null
+    df_scope = df[df[metric] > 0].copy()
 
-    if has_prod:
-        prod_dates = df.groupby(keys).agg(
-            Prod_Min_Date=(date_col,"min"), Prod_Max_Date=(date_col,"max")).reset_index()
+    # Dimension key columns
+    keys = [customer_col]
+    if has_prod: keys.append(product_col)
+    if has_chan: keys.append(channel_col)
+    if has_reg:  keys.append(region_col)
 
-    lifecycle = df.groupby(keys).agg(Min_Date=(date_col,"min"), Max_Date=(date_col,"max")).reset_index()
-    ext = max(lookback_months)
-    lifecycle["Grid_End"] = (lifecycle["Max_Date"] + pd.DateOffset(months=ext)).clip(
-        upper=dataset_max + pd.DateOffset(months=ext))
+    # ── Step 2: Generate missing months ─────────────────────────────────
+    # 2.1  Dataset_Max_Date = max(Date) across all in-scope rows
+    dataset_max = df_scope[date_col].max()
 
-    all_months = pd.date_range(lifecycle["Min_Date"].min(), lifecycle["Grid_End"].max(), freq="ME")
+    # 2.3  Summarize: Group by keys + Date, sum MRR + Qty
+    agg_actual = (
+        df_scope.groupby(keys + [date_col], as_index=False)
+        .agg(**{metric: (metric, "sum"), qty_col: (qty_col, "sum")})
+    )
+    agg_actual["Dataset_Max_Date"] = dataset_max
+
+    # 2.5  Per-key lifecycle: min date, max date
+    lifecycle = (
+        df_scope.groupby(keys, as_index=False)
+        .agg(Min_Date=(date_col, "min"), Max_Date=(date_col, "max"))
+    )
+    lifecycle["Dataset_Max_Date"] = dataset_max
+
+    # 2.7  Generate rows: Initial=[Min_Date], Cond=[Date]<=[Dataset_Max_Date],
+    #      Loop=DateTimeTrim(DateTimeAdd(Date,1,'month'),'lastofmonth')
+    #      Then filter: Date <= DateTimeTrim(DateTimeAdd(Dataset_Max_Date,12,'months'),'lastofmonth')
+    all_months = pd.date_range(
+        lifecycle["Min_Date"].min(),
+        dataset_max + pd.DateOffset(months=12),
+        freq="ME"
+    )
     lifecycle["_k"] = 1
     mdf  = pd.DataFrame({"Date_Grid": all_months, "_k": 1})
     grid = lifecycle.merge(mdf, on="_k").drop("_k", axis=1)
-    grid = grid[(grid["Date_Grid"] >= grid["Min_Date"]) & (grid["Date_Grid"] <= grid["Grid_End"])]
+
+    # Filter: Date <= Dataset_Max_Date (generates the active window)
+    # Then extended to Dataset_Max + 12m for expiry pool
+    grid = grid[
+        (grid["Date_Grid"] >= grid["Min_Date"]) &
+        (grid["Date_Grid"] <= grid["Dataset_Max_Date"] + pd.DateOffset(months=12))
+    ]
     grid = grid.rename(columns={"Date_Grid": date_col})
 
-    qty_list = [qty_col] if has_qty else []
-    src_cols = keys + [date_col, metric] + qty_list
-    df_grid  = grid[keys + [date_col, "Min_Date", "Max_Date"]].merge(
-        df[src_cols], on=keys+[date_col], how="left")
-    df_grid[metric] = df_grid[metric].fillna(0)
-    for q in qty_list: df_grid[q] = df_grid[q].fillna(0)
+    # 2.9  Join actual MRR back; missing rows get 0 (Alteryx formula: 0)
+    df_grid = grid[keys + [date_col, "Min_Date", "Max_Date", "Dataset_Max_Date"]].merge(
+        agg_actual[keys + [date_col, metric, qty_col]],
+        on=keys + [date_col], how="left"
+    )
+    df_grid[metric]  = df_grid[metric].fillna(0)
+    df_grid[qty_col] = df_grid[qty_col].fillna(0)
+
+    # Sort for multi-row formula (Step 3): keys + date
+    df_grid = df_grid.sort_values(keys + [date_col]).reset_index(drop=True)
+
+    # ── Step 4: Vintage & customer/product date lookups ──────────────────
+    # 4.4  Customer min/max date
+    cust_dates = (
+        df_scope.groupby(customer_col, as_index=False)
+        .agg(Customer_Min_Date=(date_col, "min"), Customer_Max_Date=(date_col, "max"))
+    )
+
+    # 4.7  Customer-product min/max date
+    prod_keys = [customer_col] + ([product_col] if has_prod else [])
+    prod_dates = (
+        df_scope.groupby(prod_keys, as_index=False)
+        .agg(CustProd_Min_Date=(date_col, "min"), CustProd_Max_Date=(date_col, "max"))
+    )
 
     df_grid = df_grid.merge(cust_dates, on=customer_col, how="left")
-    if has_prod:
-        df_grid = df_grid.merge(prod_dates, on=keys, how="left")
-    else:
-        df_grid["Prod_Min_Date"] = df_grid["Cust_Min_Date"]
-        df_grid["Prod_Max_Date"] = df_grid["Cust_Max_Date"]
+    df_grid = df_grid.merge(prod_dates, on=prod_keys,    how="left")
 
-    df_grid = df_grid.sort_values(keys + [date_col])
+    # 4.5 / 4.9  Vintage
+    df_grid["Vintage"] = df_grid["Customer_Min_Date"].dt.year
 
-    for extra in [channel_col, region_col]:
-        if extra and extra != "None" and extra in df.columns:
-            emap = df.drop_duplicates(subset=[customer_col])[[customer_col, extra]]
-            df_grid = df_grid.merge(emap, on=customer_col, how="left", suffixes=("","_x"))
+    # Attach extra dimension columns (channel/region) from original data
+    for extra_col in ([channel_col] if has_chan else []) + ([region_col] if has_reg else []):
+        if extra_col in df_scope.columns:
+            emap = df_scope.drop_duplicates(subset=[customer_col])[[customer_col, extra_col]]
+            df_grid = df_grid.merge(emap, on=customer_col, how="left", suffixes=("", "_x"))
+
+    # ── Step 3 + 5: Run per lookback window ─────────────────────────────
+    # Alteryx runs 3 separate branches (lb=1, lb=3, lb=12) then unions them.
+    # Key insight: Prior MRR = shift(N) where N = lookback months.
+    # Lookback FILTER: only include rows where
+    #   Round(DatetimeDiff(Date, Max_Date, 'days') / 30, 1) <= MonthLookback
+    # This means rows more than N months beyond the customer's max date are excluded.
 
     results = []
     for lb in lookback_months:
+
         t = df_grid.copy()
-        t["Lookback"] = lb
-        t[f"Prior_{metric}"] = t.groupby(keys)[metric].shift(1).fillna(0)
-        for q in qty_list: t[f"Prior_{q}"] = t.groupby(keys)[q].shift(1).fillna(0)
+        t["Month Lookback"] = lb
 
-        t["Expiry_Flag"]    = (t[date_col] > t["Max_Date"]).astype(int)
-        t["DTE"]            = np.where(t["Expiry_Flag"]==1, t[f"Prior_{metric}"], 0)
-        mask = ~((t[metric]==0) & (t[f"Prior_{metric}"]==0) & (t["DTE"]==0))
-        t = t[mask].copy()
+        # 3.x.2 Filter: Round(diff(Date, Max_Date, days)/30, 1) <= lb
+        days_beyond = (t[date_col] - t["Max_Date"]).dt.days
+        t = t[np.round(days_beyond / 30, 1) <= lb].copy()
 
-        t["Lookback_Date"]  = (t[date_col] - pd.DateOffset(months=lb)) + pd.offsets.MonthEnd(0)
-        days_since          = (t[date_col] - t["Cust_Min_Date"]).dt.days
-        t["Past_Revenue"]   = np.where(days_since/30 >= lb, "Yes", "No")
-        t["Future_Revenue"] = np.where(t["Cust_Max_Date"] > t[date_col], "Yes", "No")
+        # 3.x.3 Expiry Pool Flag & MRR Flag
+        t["Expiry Pool Flag"] = np.where(t[date_col] > t["Max_Date"], 1, 0)
+        t["MRR Flag"]         = np.where(t[date_col] <= t["Max_Date"], 1, 0)
 
-        if has_prod:
-            conditions = [
-                (t[f"Prior_{metric}"]==0) & (t[metric]>0) & (t["Past_Revenue"]=="No") & (t["Cust_Min_Date"]>t["Lookback_Date"]),
-                (t[f"Prior_{metric}"]==0) & (t[metric]>0) & (t["Past_Revenue"]=="No") & (t["Prod_Min_Date"]>t["Lookback_Date"]) & (t["Cust_Min_Date"]<=t["Lookback_Date"]),
-                (t[f"Prior_{metric}"]==0) & (t[metric]>0) & (t["Past_Revenue"]=="No") & (t["Prod_Min_Date"]<=t["Lookback_Date"]),
-                (t[f"Prior_{metric}"]==0) & (t[metric]>0) & (t["Past_Revenue"]=="Yes"),
-                (t[f"Prior_{metric}"]>0)  & (t[metric]>t[f"Prior_{metric}"]),
-                (t[f"Prior_{metric}"]>0)  & (t[metric]<t[f"Prior_{metric}"]) & (t[metric]>0),
-                (t[f"Prior_{metric}"]>0)  & (t[metric]==0) & (t["DTE"]>0) & (t["Future_Revenue"]=="No") & (t["Cust_Max_Date"]<t[date_col]),
-                (t[f"Prior_{metric}"]>0)  & (t[metric]==0) & (t["DTE"]>0) & (t["Future_Revenue"]=="No") & (t["Cust_Max_Date"]>=t[date_col]),
-                (t[metric]==0) & (t["Future_Revenue"]=="Yes"),
-            ]
-            choices = ["New Logo","Cross Sell","Other In","Returning","Upsell","Downsell","Churn","Partial Churn","Lapsed"]
-        else:
-            conditions = [
-                (t[f"Prior_{metric}"]==0) & (t[metric]>0) & (t["Past_Revenue"]=="No"),
-                (t[f"Prior_{metric}"]==0) & (t[metric]>0) & (t["Past_Revenue"]=="Yes"),
-                (t[f"Prior_{metric}"]>0)  & (t[metric]>t[f"Prior_{metric}"]),
-                (t[f"Prior_{metric}"]>0)  & (t[metric]<t[f"Prior_{metric}"]) & (t[metric]>0),
-                (t[f"Prior_{metric}"]>0)  & (t[metric]==0) & (t["Future_Revenue"]=="No"),
-                (t[metric]==0) & (t["Future_Revenue"]=="Yes"),
-            ]
-            choices = ["New Logo","Returning","Upsell","Downsell","Churn","Lapsed"]
+        # 3.x.4 Multi-Row Formula: Prior MRR = shift(lb) grouped by keys
+        # Alteryx: [Row-N:MRR] where N = Month Lookback
+        t = t.sort_values(keys + [date_col]).reset_index(drop=True)
+        t["Prior MRR or ARR"] = (
+            t.groupby(keys)[metric]
+            .transform(lambda s: s.shift(lb))
+            .fillna(0)
+        )
+        t["Prior Quantity"] = (
+            t.groupby(keys)[qty_col]
+            .transform(lambda s: s.shift(lb))
+            .fillna(0)
+        )
 
-        t["Bridge"]         = np.select(conditions, choices, default="No Change")
-        t["Bridge_Value"]   = t[metric] - t[f"Prior_{metric}"]
-        t["Beginning_ARR"]  = t[f"Prior_{metric}"]
-        t["Ending_ARR"]     = t[metric]
+        # 3.x.6 DTE (Due to Expire)
+        t["DTE"] = np.where(t["Expiry Pool Flag"] == 1, t["Prior MRR or ARR"], 0)
 
-        if has_qty:
-            q = qty_list[0]
-            t["ASP"]           = t[metric]              / t[q].replace(0, np.nan)
-            t["Prior_ASP"]     = t[f"Prior_{metric}"]   / t[f"Prior_{q}"].replace(0, np.nan)
-            t["Volume_Impact"] = (t[q]-t[f"Prior_{q}"]) * t["Prior_ASP"].fillna(0)
-            t["Price_Impact"]  = (t["ASP"].fillna(0)-t["Prior_ASP"].fillna(0)) * t[f"Prior_{q}"].fillna(0)
-            t["PV_Misc"]       = t["Bridge_Value"] - (t["Volume_Impact"].fillna(0)+t["Price_Impact"].fillna(0))
+        # 4.2 Filter FALSE side: remove rows where MRR=0 AND Prior=0 AND DTE=0
+        t = t[~((t[metric] == 0) & (t["Prior MRR or ARR"] == 0) & (t["DTE"] == 0))].copy()
 
-        t["Vintage"] = t["Cust_Min_Date"].dt.year
+        # ── Step 5: Bridge Classification ─────────────────────────────
+        # 5.1 pastMRR: days(Date - Min_Date)/30 < lb → "No" else "Yes"
+        days_from_first   = (t[date_col] - t["Min_Date"]).dt.days
+        t["pastMRR"]      = np.where(np.round(days_from_first / 30, 1) < lb, "No", "Yes")
+
+        # 5.1 futureMRR: Customer_Max_Date > Date → "Yes" else "No"
+        t["futureMRR"]    = np.where(t["Customer_Max_Date"] > t[date_col], "Yes", "No")
+
+        # Lookback cutoff date: DateTimeTrim(DateTimeAdd(Date, -lb, 'months'), 'lastofmonth')
+        t["Lookback Date"] = (
+            t[date_col].apply(lambda d: (d - pd.DateOffset(months=lb)) + pd.offsets.MonthEnd(0))
+        )
+
+        # 5.2 Bridge Flag (exact Alteryx logic)
+        prior  = t["Prior MRR or ARR"]
+        curr   = t[metric]
+        past   = t["pastMRR"]
+        future = t["futureMRR"]
+        dte    = t["DTE"]
+        ld     = t["Lookback Date"]          # lookback cutoff
+        cust_min = t["Customer_Min_Date"]
+        cust_max = t["Customer_Max_Date"]
+        prod_min = t["CustProd_Min_Date"]
+        prod_max = t["CustProd_Max_Date"]
+
+        conditions = [
+            # New Logo / Cross-sell / Other In  (Prior=0, Curr>0, past="No")
+            (prior==0) & (curr!=0) & (past=="No") & (prod_min <= ld),             # Other In
+            (prior==0) & (curr!=0) & (past=="No") & (cust_min <= ld) & (prod_min > ld),  # Cross-sell
+            (prior==0) & (curr!=0) & (past=="No") & (cust_min > ld),              # New Logo
+            # Returning  (Prior=0, Curr>0, past="Yes")
+            (prior==0) & (curr!=0) & (past=="Yes"),                               # Returning
+            # Lapsed  (Curr=0, future="Yes")  — check before Churn
+            (curr==0) & (future=="Yes"),                                           # Lapsed
+            # Other Out / Churn-Partial / Churn  (Prior≠0, Curr=0, DTE≠0, future="No")
+            (prior!=0) & (curr==0) & (dte!=0) & (future=="No") & (prod_max >= t[date_col]),   # Other Out
+            (prior!=0) & (curr==0) & (dte!=0) & (future=="No") & (cust_max >= t[date_col]) & (prod_max < t[date_col]),  # Churn-Partial
+            (prior!=0) & (curr==0) & (dte!=0) & (future=="No") & (cust_max < t[date_col]) & (prod_max < t[date_col]),  # Churn
+            # Upsell / Downsell  (Prior≠0, Curr≠0)
+            (prior!=0) & (curr!=0) & (prior <= curr),                             # Upsell
+            (prior!=0) & (curr!=0) & (prior > curr),                              # Downsell
+        ]
+        choices = [
+            "Other In", "Cross-sell", "New Logo",
+            "Returning",
+            "Lapsed",
+            "Other Out", "Churn-Partial", "Churn",
+            "Upsell", "Downsell",
+        ]
+        t["Bridge Classification"] = np.select(conditions, choices, default="Unclassified")
+
+        # 5.2 Bridge Value
+        t["Bridge Value"]         = curr - prior
+        # 5.3 Beginning / Ending
+        t["Beginning MRR or ARR"] = prior
+        t["Ending MRR or ARR"]    = curr
+
+        # 5.4 Price / Volume decomposition (only for Upsell/Downsell)
+        is_upsell_downsell = t["Bridge Classification"].isin(["Upsell", "Downsell"])
+
+        t["Price New"]   = curr  / t[qty_col].replace(0, np.nan)
+        t["pPrice New"]  = prior / t["Prior Quantity"].replace(0, np.nan)
+
+        qty_diff   = t[qty_col]         - t["Prior Quantity"]
+        price_diff = t["Price New"]     - t["pPrice New"]
+        min_qty    = np.minimum(t[qty_col], t["Prior Quantity"])
+        min_price  = np.where(t["Price New"] < t["pPrice New"], t["Price New"], t["pPrice New"])
+
+        # Price on Volume (interaction term)
+        pov = np.where(
+            is_upsell_downsell,
+            np.where(
+                (t["Price New"] < t["pPrice New"]) & (t[qty_col] < t["Prior Quantity"]),
+                ((t["Price New"] - t["pPrice New"]) * (t[qty_col] - t["Prior Quantity"])) * -1,
+                np.where(
+                    (t["Price New"] > t["pPrice New"]) & (t[qty_col] > t["Prior Quantity"]),
+                    (t["Price New"] - t["pPrice New"]) * (t[qty_col] - t["Prior Quantity"]),
+                    0
+                )
+            ),
+            0
+        )
+
+        # Volume Impact
+        vol_impact = np.where(
+            is_upsell_downsell,
+            qty_diff * np.where(t["Price New"] < t["pPrice New"], t["Price New"], t["pPrice New"]),
+            0
+        )
+
+        # Price Impact
+        pri_impact = np.where(
+            is_upsell_downsell,
+            price_diff * np.where(t[qty_col] < t["Prior Quantity"], t[qty_col], t["Prior Quantity"]),
+            0
+        )
+
+        # PV Miscellaneous
+        pv_misc = np.where(
+            is_upsell_downsell,
+            t["Bridge Value"] - (
+                np.where(np.isnan(pov), 0, pov) +
+                np.where(np.isnan(pri_impact), 0, pri_impact) +
+                np.where(np.isnan(vol_impact), 0, vol_impact)
+            ),
+            0
+        )
+
+        t["Price on Volume"] = np.where(is_upsell_downsell, pov, 0)
+        t["Price Impact"]    = np.where(is_upsell_downsell, pri_impact, 0)
+        # 5.5 Final Volume Impact = Volume Impact + PV Miscellaneous (Alteryx formula 5.5)
+        t["Volume Impact"]   = (
+            np.where(np.isnan(vol_impact), 0, vol_impact) +
+            np.where(np.isnan(pv_misc), 0, pv_misc)
+        )
+
+        # 5.5 Lookback Date (already computed above as "Lookback Date")
+        # Rename internal columns for consistency
+        t = t.rename(columns={
+            "Prior MRR or ARR": f"Prior_{metric}",
+            "Prior Quantity":   f"Prior_{qty_col}",
+        })
+        t["Lookback"]    = lb     # keep numeric lookback for filtering
+        t["Beginning_ARR"] = t["Beginning MRR or ARR"]
+        t["Ending_ARR"]    = t["Ending MRR or ARR"]
+        t["Bridge"]        = t["Bridge Classification"]   # alias for existing chart code
+        t["Bridge_Value"]  = t["Bridge Value"]
+
         results.append(t)
 
     return pd.concat(results, ignore_index=True)
