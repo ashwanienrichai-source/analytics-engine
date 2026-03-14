@@ -3,489 +3,608 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
 
-st.set_page_config(page_title="Revenue Analytics Engine", layout="wide", initial_sidebar_state="expanded")
-
-# ---------------------------------------------------------
-# CUSTOM CSS — Premium SaaS Dark Theme
-# ---------------------------------------------------------
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-}
-
-/* Hide streamlit default elements */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-
-/* Main background */
-.stApp {
-    background: #0A0D14;
-    color: #E8EAF0;
-}
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: #0E1117 !important;
-    border-right: 1px solid #1E2433 !important;
-}
-[data-testid="stSidebar"] .stRadio label {
-    color: #8892A4 !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    padding: 6px 8px !important;
-    border-radius: 6px !important;
-    transition: all 0.2s !important;
-}
-[data-testid="stSidebar"] .stRadio label:hover {
-    color: #E8EAF0 !important;
-    background: #1A2035 !important;
-}
-[data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p {
-    color: #8892A4 !important;
-}
-
-/* Cards */
-.metric-card {
-    background: #111827;
-    border: 1px solid #1E2B3C;
-    border-radius: 12px;
-    padding: 20px 24px;
-    position: relative;
-    overflow: hidden;
-}
-.metric-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #3B82F6, #8B5CF6);
-}
-.metric-label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #6B7A99;
-    margin-bottom: 8px;
-}
-.metric-value {
-    font-size: 28px;
-    font-weight: 700;
-    color: #E8EAF0;
-    letter-spacing: -0.02em;
-    font-family: 'DM Mono', monospace;
-}
-.metric-change-pos {
-    font-size: 12px;
-    color: #34D399;
-    font-weight: 500;
-    margin-top: 4px;
-}
-.metric-change-neg {
-    font-size: 12px;
-    color: #F87171;
-    font-weight: 500;
-    margin-top: 4px;
-}
-.metric-date {
-    font-size: 10px;
-    color: #4B5568;
-    font-weight: 500;
-    position: absolute;
-    top: 16px;
-    right: 16px;
-}
-
-/* Section headers */
-.section-header {
-    font-size: 14px;
-    font-weight: 600;
-    color: #8892A4;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin: 24px 0 12px 0;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #1E2433;
-}
-
-/* Status badge */
-.badge-live {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(52, 211, 153, 0.1);
-    border: 1px solid rgba(52, 211, 153, 0.2);
-    color: #34D399;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-}
-.badge-soon {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(139, 92, 246, 0.1);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-    color: #8B5CF6;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-}
-
-/* Page title */
-.page-title {
-    font-size: 26px;
-    font-weight: 700;
-    color: #E8EAF0;
-    letter-spacing: -0.03em;
-    margin-bottom: 4px;
-}
-.page-subtitle {
-    font-size: 13px;
-    color: #6B7A99;
-    font-weight: 400;
-    margin-bottom: 28px;
-}
-
-/* Step indicator */
-.step-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin-bottom: 24px;
-}
-.step-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    font-weight: 500;
-}
-.step-num-active {
-    width: 24px; height: 24px;
-    background: #3B82F6;
-    color: white;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
-}
-.step-num-done {
-    width: 24px; height: 24px;
-    background: #34D399;
-    color: #0A0D14;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
-}
-.step-num-inactive {
-    width: 24px; height: 24px;
-    background: #1E2433;
-    color: #4B5568;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
-}
-.step-label-active { color: #E8EAF0; }
-.step-label-inactive { color: #4B5568; }
-.step-divider {
-    flex: 1; height: 1px;
-    background: #1E2433;
-    max-width: 40px;
-}
-
-/* Upload panel */
-.upload-panel {
-    background: #111827;
-    border: 1px solid #1E2B3C;
-    border-radius: 12px;
-    padding: 24px;
-}
-
-/* Coming soon big */
-.coming-soon-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 80px 40px;
-    text-align: center;
-}
-.coming-soon-icon {
-    font-size: 64px;
-    margin-bottom: 20px;
-    animation: pulse 2s infinite;
-}
-@keyframes pulse {
-    0%, 100% { opacity: 0.6; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.05); }
-}
-.coming-soon-title {
-    font-size: 36px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #8B5CF6, #3B82F6);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-bottom: 12px;
-}
-.coming-soon-sub {
-    font-size: 15px;
-    color: #6B7A99;
-    max-width: 360px;
-}
-
-/* Selectbox, input styling overrides */
-.stSelectbox > div > div {
-    background: #111827 !important;
-    border: 1px solid #1E2B3C !important;
-    color: #E8EAF0 !important;
-    border-radius: 8px !important;
-}
-.stTextInput input {
-    background: #111827 !important;
-    border: 1px solid #1E2B3C !important;
-    color: #E8EAF0 !important;
-    border-radius: 8px !important;
-}
-.stMultiSelect > div > div {
-    background: #111827 !important;
-    border: 1px solid #1E2B3C !important;
-    border-radius: 8px !important;
-}
-.stCheckbox label {
-    color: #8892A4 !important;
-    font-size: 13px !important;
-}
-.stButton > button {
-    background: linear-gradient(135deg, #3B82F6, #2563EB) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    font-size: 13px !important;
-    padding: 10px 24px !important;
-    transition: all 0.2s !important;
-    width: 100% !important;
-}
-.stButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3) !important;
-}
-.stButton > button:disabled {
-    background: #1E2433 !important;
-    color: #4B5568 !important;
-    cursor: not-allowed !important;
-}
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] {
-    background: transparent !important;
-    border-bottom: 1px solid #1E2433 !important;
-    gap: 0 !important;
-}
-.stTabs [data-baseweb="tab"] {
-    background: transparent !important;
-    color: #6B7A99 !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    padding: 10px 20px !important;
-    border-radius: 0 !important;
-    border-bottom: 2px solid transparent !important;
-}
-.stTabs [aria-selected="true"] {
-    color: #E8EAF0 !important;
-    border-bottom: 2px solid #3B82F6 !important;
-}
-.stTabs [data-baseweb="tab-panel"] {
-    background: transparent !important;
-    padding-top: 20px !important;
-}
-
-/* Dataframe */
-.stDataFrame {
-    border: 1px solid #1E2433 !important;
-    border-radius: 8px !important;
-}
-
-/* Divider */
-hr {
-    border-color: #1E2433 !important;
-}
-
-/* Warning / info */
-.stWarning {
-    background: rgba(251, 191, 36, 0.08) !important;
-    border: 1px solid rgba(251, 191, 36, 0.2) !important;
-    border-radius: 8px !important;
-}
-.stSuccess {
-    background: rgba(52, 211, 153, 0.08) !important;
-    border: 1px solid rgba(52, 211, 153, 0.2) !important;
-    border-radius: 8px !important;
-}
-
-/* Number input */
-.stNumberInput input {
-    background: #111827 !important;
-    border: 1px solid #1E2B3C !important;
-    color: #E8EAF0 !important;
-    border-radius: 8px !important;
-}
-
-/* Radio buttons */
-.stRadio > div {
-    gap: 8px !important;
-}
-
-/* Plotly chart background */
-.js-plotly-plot .plotly .bg {
-    fill: transparent !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------------------------------------------------
-# PLOTLY DARK THEME CONFIG
-# ---------------------------------------------------------
-PLOTLY_LAYOUT = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(17,24,39,0.6)",
-    font=dict(family="DM Sans", color="#8892A4", size=12),
-    xaxis=dict(
-        gridcolor="#1E2433",
-        zerolinecolor="#1E2433",
-        tickfont=dict(color="#6B7A99", size=11),
-        linecolor="#1E2433",
-    ),
-    yaxis=dict(
-        gridcolor="#1E2433",
-        zerolinecolor="#1E2433",
-        tickfont=dict(color="#6B7A99", size=11),
-        linecolor="#1E2433",
-    ),
-    legend=dict(
-        bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#8892A4", size=11),
-    ),
-    margin=dict(l=12, r=12, t=36, b=12),
+st.set_page_config(
+    page_title="Revenue Analytics Engine",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-BRIDGE_COLORS = {
-    "New Logo":      "#34D399",
-    "New":           "#34D399",
-    "Upsell":        "#60A5FA",
-    "Cross Sell":    "#A78BFA",
-    "Returning":     "#FCD34D",
-    "Downsell":      "#FB923C",
-    "Churn":         "#F87171",
-    "Partial Churn": "#FCA5A5",
-    "Lapsed":        "#94A3B8",
-    "No Change":     "#374151",
-    "Other In":      "#6EE7B7",
-    "Other Out":     "#FCA5A5",
-}
-
-# ---------------------------------------------------------
-# ADMIN EMAIL
-# ---------------------------------------------------------
-ADMIN_EMAIL = "ashwanivatsalarya@gmail.com"
-
-# ---------------------------------------------------------
-# SESSION STATE
-# ---------------------------------------------------------
-for key, default in [
+# ─────────────────────────────────────────────────────────────────────────────
+# SESSION INIT (needed before any page renders)
+# ─────────────────────────────────────────────────────────────────────────────
+for _k, _v in [
+    ("authenticated", False),
     ("user_email", ""),
     ("validated_df", None),
     ("result", None),
     ("mapping", {}),
-    ("dataset_type", "Revenue Dataset"),
+    ("lookbacks", [1, 12]),
+    ("_cohort_df", None),
 ]:
-    if key not in st.session_state:
-        st.session_state[key] = default
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
-# ---------------------------------------------------------
-# SIDEBAR
-# ---------------------------------------------------------
-with st.sidebar:
-    st.markdown('<div style="padding: 8px 0 4px 0; font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#4B5568;">WORKSPACE</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:14px; font-weight:600; color:#E8EAF0; margin-bottom:20px;">Revenue Analytics Engine</div>', unsafe_allow_html=True)
+ADMIN_EMAIL    = "ashwanivatsalarya@gmail.com"
+ADMIN_NAME     = "Ashwani"
+ADMIN_PASSWORD = "Ashwani"
 
-    st.markdown('<div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#4B5568; margin-bottom:8px;">USER</div>', unsafe_allow_html=True)
-    user_email = st.text_input("", placeholder="Enter your email", label_visibility="collapsed")
-    if user_email:
-        st.session_state.user_email = user_email
+# ─────────────────────────────────────────────────────────────────────────────
+# LANDING / LOGIN PAGE
+# ─────────────────────────────────────────────────────────────────────────────
+if not st.session_state.authenticated:
 
-    st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; margin:0; padding:0; }
+    #MainMenu { visibility: hidden; }
+    footer    { visibility: hidden; }
+    header    { visibility: hidden; }
 
-    st.markdown('<div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#4B5568; margin-bottom:12px;">ANALYTICS MODULES</div>', unsafe_allow_html=True)
+    /* Full-page white background */
+    .stApp { background: #FFFFFF; }
 
-    module = st.radio(
-        "",
-        ["Cohort Analytics", "Customer Analytics", "Product Bundling", "ACV Analysis", "Revenue Concentration"],
-        label_visibility="collapsed"
+    /* Hide sidebar on landing */
+    [data-testid="stSidebar"] { display: none !important; }
+
+    /* Remove Streamlit default padding */
+    .block-container { padding: 0 !important; max-width: 100% !important; }
+
+    /* Input styling */
+    .stTextInput input {
+        background: #F8F9FC !important;
+        border: 1.5px solid #E2E6EF !important;
+        border-radius: 8px !important;
+        color: #1A1D23 !important;
+        font-size: 14px !important;
+        padding: 12px 14px !important;
+        transition: border-color 0.2s !important;
+    }
+    .stTextInput input:focus {
+        border-color: #0047AB !important;
+        box-shadow: 0 0 0 3px rgba(0,71,171,0.08) !important;
+    }
+    .stTextInput label { color: #5A6478 !important; font-size: 12px !important; font-weight: 600 !important; }
+
+    /* Primary button */
+    .stButton > button {
+        background: #0047AB !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        padding: 12px 24px !important;
+        width: 100% !important;
+        transition: background 0.15s, transform 0.1s !important;
+        letter-spacing: 0.01em !important;
+    }
+    .stButton > button:hover {
+        background: #003899 !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 6px 20px rgba(0,71,171,0.22) !important;
+    }
+
+    /* Error box */
+    .stAlert { border-radius: 8px !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Two-column landing layout ──────────────────────────────────────────
+    hero_col, login_col = st.columns([1.35, 1], gap="large")
+
+    # ── LEFT — Hero / Marketing ────────────────────────────────────────────
+    with hero_col:
+        st.markdown("""
+        <div style="min-height:100vh; background:linear-gradient(150deg,#001F5B 0%,#0047AB 55%,#1565C0 100%);
+                    padding: 56px 52px; display:flex; flex-direction:column; justify-content:space-between;">
+
+          <!-- Logo & wordmark -->
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:56px;">
+            <div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:8px;
+                        display:flex;align-items:center;justify-content:center;
+                        color:white;font-size:18px;font-weight:800;border:1px solid rgba(255,255,255,0.25);">R</div>
+            <span style="color:white;font-size:16px;font-weight:700;letter-spacing:-0.01em;">Revenue Analytics</span>
+          </div>
+
+          <!-- Hero headline -->
+          <div>
+            <div style="display:inline-block;background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.85);
+                        font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+                        padding:5px 12px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);
+                        margin-bottom:20px;">
+              Revenue Intelligence Platform
+            </div>
+            <h1 style="color:#FFFFFF;font-size:44px;font-weight:800;line-height:1.1;
+                       letter-spacing:-0.03em;margin:0 0 20px 0;">
+              Turn revenue data<br>into strategic insight
+            </h1>
+            <p style="color:rgba(255,255,255,0.72);font-size:16px;line-height:1.65;
+                      max-width:440px;margin:0 0 44px 0;">
+              Automated cohort segmentation, SaaS revenue bridges, retention analytics,
+              and pricing intelligence — in one platform. No consultants needed.
+            </p>
+
+            <!-- Feature pills -->
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:48px;">
+              <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.9);
+                           padding:7px 14px;border-radius:20px;font-size:12px;font-weight:500;
+                           border:1px solid rgba(255,255,255,0.18);">📊 Cohort Analytics</span>
+              <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.9);
+                           padding:7px 14px;border-radius:20px;font-size:12px;font-weight:500;
+                           border:1px solid rgba(255,255,255,0.18);">📈 ARR Bridge</span>
+              <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.9);
+                           padding:7px 14px;border-radius:20px;font-size:12px;font-weight:500;
+                           border:1px solid rgba(255,255,255,0.18);">🔄 NRR / GRR</span>
+              <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.9);
+                           padding:7px 14px;border-radius:20px;font-size:12px;font-weight:500;
+                           border:1px solid rgba(255,255,255,0.18);">💰 Price vs Volume</span>
+              <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.9);
+                           padding:7px 14px;border-radius:20px;font-size:12px;font-weight:500;
+                           border:1px solid rgba(255,255,255,0.18);">🎯 Revenue Concentration</span>
+            </div>
+          </div>
+
+          <!-- Pricing cards -->
+          <div>
+            <div style="color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;
+                        letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">
+              Simple, transparent pricing
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+
+              <!-- Free -->
+              <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+                          border-radius:12px;padding:18px 16px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;font-weight:700;
+                             text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Free</div>
+                <div style="color:#FFFFFF;font-size:22px;font-weight:800;margin-bottom:4px;">$0</div>
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;margin-bottom:12px;">forever</div>
+                <div style="color:rgba(255,255,255,0.75);font-size:12px;line-height:1.8;">
+                  ✓ Upload &amp; analyse<br>
+                  ✓ View dashboards<br>
+                  ✗ Download results
+                </div>
+              </div>
+
+              <!-- Premium -->
+              <div style="background:rgba(255,255,255,0.14);border:1.5px solid rgba(255,255,255,0.35);
+                          border-radius:12px;padding:18px 16px;position:relative;">
+                <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+                            background:#F4A900;color:#1A1D23;font-size:10px;font-weight:700;
+                            padding:2px 10px;border-radius:20px;white-space:nowrap;">MOST POPULAR</div>
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;font-weight:700;
+                             text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Premium</div>
+                <div style="color:#FFFFFF;font-size:22px;font-weight:800;margin-bottom:4px;">$25</div>
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;margin-bottom:12px;">one-time / year</div>
+                <div style="color:rgba(255,255,255,0.75);font-size:12px;line-height:1.8;">
+                  ✓ Everything in Free<br>
+                  ✓ Download results<br>
+                  ✓ Export reports
+                </div>
+              </div>
+
+              <!-- Per Run -->
+              <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+                          border-radius:12px;padding:18px 16px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;font-weight:700;
+                             text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Usage</div>
+                <div style="color:#FFFFFF;font-size:22px;font-weight:800;margin-bottom:4px;">$10</div>
+                <div style="color:rgba(255,255,255,0.55);font-size:11px;margin-bottom:12px;">per analytics run</div>
+                <div style="color:rgba(255,255,255,0.75);font-size:12px;line-height:1.8;">
+                  ✓ Cohort Engine<br>
+                  ✓ Customer Analytics<br>
+                  ✓ SaaS Bridge
+                </div>
+              </div>
+            </div>
+
+            <!-- Consulting CTA -->
+            <div style="margin-top:20px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+                        border-radius:12px;padding:18px 20px;display:flex;align-items:center;gap:16px;">
+              <div style="font-size:28px;">👨‍💼</div>
+              <div>
+                <div style="color:#FFFFFF;font-size:13px;font-weight:700;margin-bottom:4px;">
+                  Expert Analytics Consulting — No full-time hire needed
+                </div>
+                <div style="color:rgba(255,255,255,0.65);font-size:12px;line-height:1.5;">
+                  Book Ashwani for 1–2 hours to walk through your data, interpret results, or build a revenue story.
+                  Former PE analytics · Deep SaaS metrics expertise.
+                </div>
+              </div>
+              <div style="margin-left:auto;flex-shrink:0;">
+                <div style="background:rgba(255,255,255,0.15);color:#FFFFFF;font-size:12px;font-weight:700;
+                            padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);
+                            white-space:nowrap;">$150 / hr</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── RIGHT — Login form ─────────────────────────────────────────────────
+    with login_col:
+        st.markdown("""
+        <div style="min-height:100vh;background:#FFFFFF;padding:56px 48px;
+                    display:flex;flex-direction:column;justify-content:center;">
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="margin-bottom:36px;">
+          <div style="font-size:26px;font-weight:800;color:#1A1D23;
+                      letter-spacing:-0.02em;margin-bottom:8px;">Welcome back</div>
+          <div style="font-size:14px;color:#8C95A6;line-height:1.5;">
+            Sign in to access the Revenue Analytics Engine.<br>
+            New here? <span style="color:#0047AB;font-weight:600;">Create a free account below.</span>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        login_email    = st.text_input("Email address", placeholder="you@company.com")
+        login_password = st.text_input("Password", type="password", placeholder="••••••••")
+
+        if st.button("Sign in →"):
+            # Admin shortcut: name = "Ashwani", password = "Ashwani"
+            name_login = (
+                login_email.strip().lower() == "ashwani" and
+                login_password.strip() == "Ashwani"
+            )
+            email_login = (
+                login_email.strip().lower() == ADMIN_EMAIL.lower() and
+                login_password.strip() == ADMIN_PASSWORD
+            )
+            # Any email + any password = free user
+            free_login = (
+                "@" in login_email and len(login_password) >= 1
+            )
+
+            if name_login or email_login:
+                st.session_state.authenticated = True
+                st.session_state.user_email    = ADMIN_EMAIL
+                st.rerun()
+            elif free_login:
+                st.session_state.authenticated = True
+                st.session_state.user_email    = login_email.strip()
+                st.rerun()
+            else:
+                st.error("Please enter a valid email address and password.")
+
+        st.markdown("""
+        <div style="display:flex;align-items:center;gap:12px;margin:20px 0;">
+          <div style="flex:1;height:1px;background:#E2E6EF;"></div>
+          <span style="font-size:12px;color:#8C95A6;">or continue as guest</span>
+          <div style="flex:1;height:1px;background:#E2E6EF;"></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Guest / demo entry
+        if st.button("Try free demo →"):
+            st.session_state.authenticated = True
+            st.session_state.user_email    = "guest@demo.com"
+            st.rerun()
+
+        st.markdown("""
+        <div style="margin-top:36px;padding:20px;background:#F8F9FC;
+                    border-radius:12px;border:1px solid #E2E6EF;">
+          <div style="font-size:12px;font-weight:700;color:#1A1D23;margin-bottom:12px;">
+            📞 Need expert help?
+          </div>
+          <div style="font-size:12px;color:#5A6478;line-height:1.65;margin-bottom:14px;">
+            Book a 1:1 session with <strong>Ashwani</strong> — revenue analytics expert with
+            PE diligence &amp; SaaS metrics experience.<br><br>
+            Get your data analysed, results interpreted, or a custom dashboard built — no
+            long-term commitment required.
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <div style="background:#EFF6FF;color:#0047AB;font-size:11px;font-weight:600;
+                        padding:5px 12px;border-radius:6px;border:1px solid #BFDBFE;">
+              1 hr — $150
+            </div>
+            <div style="background:#EFF6FF;color:#0047AB;font-size:11px;font-weight:600;
+                        padding:5px 12px;border-radius:6px;border:1px solid #BFDBFE;">
+              2 hrs — $280
+            </div>
+            <div style="background:#EFF6FF;color:#0047AB;font-size:11px;font-weight:600;
+                        padding:5px 12px;border-radius:6px;border:1px solid #BFDBFE;">
+              Half day — $500
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:24px;font-size:11px;color:#8C95A6;line-height:1.6;">
+          By signing in you agree to our
+          <a href="#" style="color:#0047AB;text-decoration:none;">Terms of Service</a> and
+          <a href="#" style="color:#0047AB;text-decoration:none;">Privacy Policy</a>.
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.stop()  # Don't render the app until authenticated
+
+# ─────────────────────────────────────────────────────────────────────────────
+# If authenticated, re-expand sidebar and show app
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+[data-testid="stSidebar"] { display: flex !important; }
+.block-container { padding: 2rem 1rem 1rem 1rem !important; max-width: 100% !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REST OF APP STARTS HERE (CSS + Sidebar + Analytics modules)
+# ══════════════════════════════════════════════════════════════════════════════
+# CSS — Professional Light Theme (McKinsey / PwC / JPMorgan style)
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+#MainMenu { visibility: hidden; }
+footer    { visibility: hidden; }
+header    { visibility: hidden; }
+
+.stApp { background: #F8F9FC; color: #1A1D23; }
+
+[data-testid="stSidebar"] {
+    background: #FFFFFF !important;
+    border-right: 1px solid #E5E8EF !important;
+}
+[data-testid="stSidebar"] .stRadio label {
+    color: #5A6478 !important; font-size: 13px !important;
+    font-weight: 500 !important; padding: 7px 10px !important;
+    border-radius: 6px !important; transition: all 0.15s !important;
+}
+[data-testid="stSidebar"] .stRadio label:hover {
+    color: #1A1D23 !important; background: #F0F2F8 !important;
+}
+
+.metric-card {
+    background: #FFFFFF; border: 1px solid #E5E8EF;
+    border-radius: 10px; padding: 18px 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.metric-card-accent {
+    background: #FFFFFF; border: 1px solid #E5E8EF;
+    border-top: 3px solid #0047AB; border-radius: 10px;
+    padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.metric-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: #8C95A6; margin-bottom: 6px;
+}
+.metric-value { font-size: 24px; font-weight: 700; color: #1A1D23; letter-spacing: -0.02em; }
+.metric-value-lg { font-size: 26px; font-weight: 700; color: #0047AB; letter-spacing: -0.02em; }
+
+.page-title { font-size: 22px; font-weight: 700; color: #1A1D23; letter-spacing: -0.02em; margin-bottom: 2px; }
+.page-subtitle { font-size: 13px; color: #8C95A6; margin-bottom: 24px; }
+
+.section-hdr {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #8C95A6;
+    margin: 20px 0 8px 0; padding-bottom: 6px; border-bottom: 1px solid #E5E8EF;
+}
+
+.panel {
+    background: #FFFFFF; border: 1px solid #E5E8EF;
+    border-radius: 10px; padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.step-row { display: flex; align-items: center; gap: 6px; margin-bottom: 20px; }
+.step-done {
+    width: 22px; height: 22px; background: #16A34A; color: #fff;
+    border-radius: 50%; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 10px; font-weight: 700;
+}
+.step-active {
+    width: 22px; height: 22px; background: #0047AB; color: #fff;
+    border-radius: 50%; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 10px; font-weight: 700;
+}
+.step-inactive {
+    width: 22px; height: 22px; background: #E5E8EF; color: #8C95A6;
+    border-radius: 50%; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 10px; font-weight: 700;
+}
+.step-label-a { font-size: 12px; color: #1A1D23; font-weight: 500; }
+.step-label-i { font-size: 12px; color: #8C95A6; font-weight: 400; }
+.step-line    { flex: 1; height: 1px; background: #E5E8EF; max-width: 32px; }
+
+.badge-live {
+    display: inline-block; background: #DCFCE7; color: #15803D;
+    border: 1px solid #BBF7D0; padding: 2px 8px;
+    border-radius: 20px; font-size: 10px; font-weight: 600;
+}
+.badge-soon {
+    display: inline-block; background: #EFF6FF; color: #1D4ED8;
+    border: 1px solid #BFDBFE; padding: 2px 8px;
+    border-radius: 20px; font-size: 10px; font-weight: 600;
+}
+
+.coming-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 80px 40px; text-align: center;
+}
+.coming-title { font-size: 32px; font-weight: 700; color: #0047AB; margin-bottom: 10px; }
+.coming-sub   { font-size: 14px; color: #8C95A6; max-width: 340px; }
+
+.stSelectbox > div > div {
+    background: #FFFFFF !important; border: 1px solid #D1D5DB !important;
+    border-radius: 6px !important; color: #1A1D23 !important;
+}
+.stTextInput input {
+    background: #FFFFFF !important; border: 1px solid #D1D5DB !important;
+    border-radius: 6px !important; color: #1A1D23 !important;
+}
+.stMultiSelect > div > div {
+    background: #FFFFFF !important; border: 1px solid #D1D5DB !important;
+    border-radius: 6px !important;
+}
+.stCheckbox label { color: #5A6478 !important; font-size: 13px !important; }
+
+.stButton > button {
+    background: #0047AB !important; color: #FFFFFF !important;
+    border: none !important; border-radius: 6px !important;
+    font-weight: 600 !important; font-size: 13px !important;
+    padding: 10px 24px !important; transition: background 0.15s !important;
+    width: 100% !important;
+}
+.stButton > button:hover { background: #003899 !important; }
+.stButton > button:disabled { background: #E5E8EF !important; color: #8C95A6 !important; }
+
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important; border-bottom: 2px solid #E5E8EF !important;
+}
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important; color: #8C95A6 !important;
+    font-size: 13px !important; font-weight: 500 !important;
+    padding: 10px 18px !important; border-radius: 0 !important;
+    border-bottom: 2px solid transparent !important; margin-bottom: -2px !important;
+}
+.stTabs [aria-selected="true"] {
+    color: #0047AB !important; border-bottom: 2px solid #0047AB !important;
+    font-weight: 600 !important;
+}
+.stTabs [data-baseweb="tab-panel"] { background: transparent !important; padding-top: 20px !important; }
+
+.stDataFrame { border: 1px solid #E5E8EF !important; border-radius: 8px !important; }
+hr { border-color: #E5E8EF !important; }
+.stNumberInput input {
+    background: #FFFFFF !important; border: 1px solid #D1D5DB !important;
+    border-radius: 6px !important; color: #1A1D23 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plotly helpers — no xaxis/yaxis in base, always add per chart
+# ─────────────────────────────────────────────────────────────────────────────
+def base_layout(title="", height=380):
+    return dict(
+        title=dict(text=title, font=dict(size=14, color="#1A1D23", family="Inter"), x=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#FFFFFF",
+        font=dict(family="Inter", color="#5A6478", size=11),
+        height=height,
+        legend=dict(
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#5A6478", size=11),
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+        ),
+        margin=dict(l=12, r=12, t=48, b=12),
     )
 
-    st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
+LIGHT_AXIS = dict(
+    gridcolor="#F0F2F8", zerolinecolor="#E5E8EF", linecolor="#E5E8EF",
+    tickfont=dict(color="#8C95A6", size=11),
+)
+LIGHT_AXIS_REV = dict(**LIGHT_AXIS, autorange="reversed")
 
-    # Module status
-    module_status = {
-        "Cohort Analytics": ("🟢", "Live"),
-        "Customer Analytics": ("🟢", "Live"),
-        "Product Bundling": ("🔵", "Soon"),
-        "ACV Analysis": ("🔵", "Soon"),
-        "Revenue Concentration": ("🔵", "Soon"),
-    }
-    for m, (icon, status) in module_status.items():
-        badge = "badge-live" if status == "Live" else "badge-soon"
-        st.markdown(f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;"><span style="font-size:12px;color:#6B7A99;">{m}</span><span class="{badge}">{status}</span></div>', unsafe_allow_html=True)
+BRAND_BLUE   = "#0047AB"
+BRAND_COLORS = ["#0047AB", "#E8611A", "#00897B", "#8E24AA", "#F4A900", "#C62828"]
 
-# ---------------------------------------------------------
-# COMING SOON PAGE
-# ---------------------------------------------------------
+BRIDGE_COLORS = {
+    "New Logo":      "#16A34A",
+    "New":           "#16A34A",
+    "Cross Sell":    "#0047AB",
+    "Other In":      "#4ADE80",
+    "Returning":     "#F4A900",
+    "Upsell":        "#2563EB",
+    "Downsell":      "#EA580C",
+    "Churn":         "#DC2626",
+    "Partial Churn": "#FCA5A5",
+    "Lapsed":        "#94A3B8",
+    "No Change":     "#CBD5E1",
+    "Other Out":     "#F87171",
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sidebar
+# ─────────────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("""
+    <div style="display:flex;align-items:center;gap:10px;padding:4px 0 16px 0;">
+      <div style="width:32px;height:32px;background:#0047AB;border-radius:6px;
+                  display:flex;align-items:center;justify-content:center;
+                  color:white;font-size:14px;font-weight:700;">R</div>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#1A1D23;">Revenue Analytics</div>
+        <div style="font-size:10px;color:#8C95A6;margin-top:1px;">Analytics Engine v2.0</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-hdr">User</div>', unsafe_allow_html=True)
+    email_input = st.text_input("", placeholder="your@email.com", label_visibility="collapsed")
+    if email_input:
+        st.session_state.user_email = email_input
+
+    st.markdown('<div class="section-hdr">Analytics Modules</div>', unsafe_allow_html=True)
+    module = st.radio("", [
+        "Cohort Analytics", "Customer Analytics",
+        "Product Bundling", "ACV Analysis", "Revenue Concentration",
+    ], label_visibility="collapsed")
+
+    st.markdown('<div class="section-hdr" style="margin-top:24px;">Module Status</div>', unsafe_allow_html=True)
+    for mn, live in [("Cohort Analytics", True), ("Customer Analytics", True),
+                     ("Product Bundling", False), ("ACV Analysis", False), ("Revenue Concentration", False)]:
+        badge = '<span class="badge-live">Live</span>' if live else '<span class="badge-soon">Soon</span>'
+        st.markdown(
+            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;">'
+            f'<span style="font-size:12px;color:#5A6478;">{mn}</span>{badge}</div>',
+            unsafe_allow_html=True,
+        )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Coming Soon
+# ─────────────────────────────────────────────────────────────────────────────
 if module in ["Product Bundling", "ACV Analysis", "Revenue Concentration"]:
     st.markdown(f'<div class="page-title">{module}</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div class="coming-soon-wrap">
-        <div class="coming-soon-icon">🚀</div>
-        <div class="coming-soon-title">Coming Soon</div>
-        <div class="coming-soon-sub">This module is under development and will be available in the next release.</div>
-    </div>
-    """, unsafe_allow_html=True)
+    <div class="coming-wrap">
+      <div style="font-size:52px;margin-bottom:16px;">🚀</div>
+      <div class="coming-title">Coming Soon</div>
+      <div class="coming-sub">This module is under development and will be available in the next release.</div>
+    </div>""", unsafe_allow_html=True)
     st.stop()
 
-# ---------------------------------------------------------
-# FILE LOADER
-# ---------------------------------------------------------
-def load_file(uploaded_file):
-    if uploaded_file.name.endswith(".csv"):
+# ─────────────────────────────────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────────────────────────────────
+def load_file(uf):
+    if uf.name.endswith(".csv"):
         try:
-            df = pd.read_csv(uploaded_file, encoding="utf-8")
+            return pd.read_csv(uf, encoding="utf-8")
         except Exception:
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, encoding="latin1")
+            uf.seek(0)
+            return pd.read_csv(uf, encoding="latin1")
     else:
-        df = pd.read_excel(uploaded_file)
-    df.columns = df.columns.str.strip()
-    return df
+        return pd.read_excel(uf)
 
-# ---------------------------------------------------------
-# COHORT ENGINE (ORIGINAL — UNCHANGED)
-# ---------------------------------------------------------
+
+def fmt_currency(val):
+    if val is None:
+        return "—"
+    v = float(val)
+    if abs(v) >= 1_000_000:
+        return f"${v/1_000_000:.1f}M"
+    if abs(v) >= 1_000:
+        return f"${v/1_000:.0f}K"
+    return f"${v:.0f}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cohort engine (ORIGINAL — unchanged logic)
+# ─────────────────────────────────────────────────────────────────────────────
 def cohort_engine(df, metric, cols, cohort_type):
     temp = (
-        df.groupby(cols)[metric]
-        .sum()
-        .reset_index()
+        df.groupby(cols)[metric].sum().reset_index()
         .sort_values(metric, ascending=False)
     )
     temp["Rank"] = temp[metric].rank(method="dense", ascending=False)
@@ -523,367 +642,257 @@ def cohort_engine(df, metric, cols, cohort_type):
 
     return temp
 
-# ---------------------------------------------------------
-# CUSTOMER ANALYTICS ENGINE
-# ---------------------------------------------------------
-def generate_monthly_grid(df, customer_col, product_col, date_col, metric, qty_col):
-    """Generate a complete monthly grid for every customer-product combination."""
-    keys = [customer_col]
-    if product_col and product_col != "None":
-        keys.append(product_col)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Customer analytics engine
+# ─────────────────────────────────────────────────────────────────────────────
+def run_customer_analytics(df_raw, customer_col, product_col, date_col,
+                            metric, qty_col, channel_col, region_col, lookback_months):
+    df = df_raw.copy()
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+    df[metric]   = pd.to_numeric(df[metric], errors="coerce").fillna(0)
+    df           = df[df[metric] > 0].copy()
+
+    has_qty  = qty_col and qty_col != "None" and qty_col in df.columns
+    has_prod = product_col and product_col != "None" and product_col in df.columns
+
+    if has_qty:
+        df[qty_col] = pd.to_numeric(df[qty_col], errors="coerce").fillna(0)
+
+    # Normalise to month-end
+    df[date_col] = df[date_col] + pd.offsets.MonthEnd(0)
+
+    keys = [customer_col] + ([product_col] if has_prod else [])
     dataset_max = df[date_col].max()
 
-    lifecycle = (
-        df.groupby(keys)
-        .agg(Min_Date=(date_col, "min"), Max_Date=(date_col, "max"))
-        .reset_index()
-    )
-    lifecycle["End_Date"] = lifecycle["Max_Date"] + pd.DateOffset(months=12)
-    lifecycle["End_Date"] = lifecycle["End_Date"].clip(upper=dataset_max + pd.DateOffset(months=12))
-
-    full_date_range = pd.date_range(
-        lifecycle["Min_Date"].min(),
-        lifecycle["End_Date"].max(),
-        freq="ME"
-    )
-
-    lifecycle["_key"] = 1
-    months_df = pd.DataFrame({"Date_Grid": full_date_range, "_key": 1})
-    grid = lifecycle.merge(months_df, on="_key").drop("_key", axis=1)
-
-    grid = grid[(grid["Date_Grid"] >= grid["Min_Date"]) & (grid["Date_Grid"] <= grid["End_Date"])]
-    grid = grid.rename(columns={"Min_Date": "Customer_Min_Date", "Max_Date": "Customer_Max_Date"})
-
-    merge_cols = keys + [date_col]
-    grid_cols = keys + ["Date_Grid", "Customer_Min_Date", "Customer_Max_Date", "End_Date"]
-
-    # rename Date_Grid to date_col for merging
-    grid = grid.rename(columns={"Date_Grid": date_col})
-    df_full = grid[grid_cols[:-1] + ["Customer_Min_Date", "Customer_Max_Date"]].merge(
-        df[merge_cols + [metric] + ([qty_col] if qty_col and qty_col != "None" else [])],
-        on=keys + [date_col],
-        how="left"
-    )
-
-    df_full[metric] = df_full[metric].fillna(0)
-    if qty_col and qty_col != "None":
-        df_full[qty_col] = df_full[qty_col].fillna(0)
-
-    return df_full, keys, dataset_max
-
-
-def run_customer_analytics(df_raw, customer_col, product_col, date_col, metric,
-                            qty_col, channel_col, region_col, lookback_months):
-    """Full SaaS revenue bridge engine with lookback windows."""
-
-    df_raw = df_raw.copy()
-    df_raw[date_col] = pd.to_datetime(df_raw[date_col])
-    df_raw[metric] = pd.to_numeric(df_raw[metric], errors="coerce").fillna(0)
-    df_raw = df_raw[df_raw[metric] > 0].copy()
-
-    if qty_col and qty_col != "None":
-        df_raw[qty_col] = pd.to_numeric(df_raw[qty_col], errors="coerce").fillna(0)
-
-    # Normalize dates to month end
-    df_raw[date_col] = df_raw[date_col] + pd.offsets.MonthEnd(0)
-
-    keys = [customer_col]
-    if product_col and product_col != "None":
-        keys.append(product_col)
-
-    # Compute dataset max
-    dataset_max = df_raw[date_col].max()
-
-    # Customer-level min/max dates
-    cust_dates = df_raw.groupby(customer_col).agg(
+    # Customer-level min/max
+    cust_dates = df.groupby(customer_col).agg(
         Cust_Min_Date=(date_col, "min"),
         Cust_Max_Date=(date_col, "max"),
     ).reset_index()
 
-    # Product-level min/max dates (if product selected)
-    if product_col and product_col != "None":
-        prod_dates = df_raw.groupby(keys).agg(
+    # Product-level min/max
+    if has_prod:
+        prod_dates = df.groupby(keys).agg(
             Prod_Min_Date=(date_col, "min"),
             Prod_Max_Date=(date_col, "max"),
         ).reset_index()
 
-    # Generate full monthly grid
-    lifecycle = df_raw.groupby(keys).agg(
+    # Build grid
+    lifecycle = df.groupby(keys).agg(
         Min_Date=(date_col, "min"),
         Max_Date=(date_col, "max"),
     ).reset_index()
-    lifecycle["Grid_End"] = (lifecycle["Max_Date"] + pd.DateOffset(months=max(lookback_months))).clip(
-        upper=dataset_max + pd.DateOffset(months=max(lookback_months))
+    ext = max(lookback_months)
+    lifecycle["Grid_End"] = (lifecycle["Max_Date"] + pd.DateOffset(months=ext)).clip(
+        upper=dataset_max + pd.DateOffset(months=ext)
     )
 
-    all_months = pd.date_range(lifecycle["Min_Date"].min(), lifecycle["Grid_End"].max(), freq="ME")
+    all_months = pd.date_range(
+        lifecycle["Min_Date"].min(),
+        lifecycle["Grid_End"].max(),
+        freq="ME"
+    )
     lifecycle["_k"] = 1
-    months_df = pd.DataFrame({"Date_Grid": all_months, "_k": 1})
-    grid = lifecycle.merge(months_df, on="_k").drop("_k", axis=1)
+    mdf = pd.DataFrame({"Date_Grid": all_months, "_k": 1})
+    grid = lifecycle.merge(mdf, on="_k").drop("_k", axis=1)
     grid = grid[(grid["Date_Grid"] >= grid["Min_Date"]) & (grid["Date_Grid"] <= grid["Grid_End"])]
     grid = grid.rename(columns={"Date_Grid": date_col})
 
-    merge_cols = keys + [date_col, metric] + ([qty_col] if qty_col and qty_col != "None" else [])
-    df_grid = grid[keys + [date_col, "Min_Date", "Max_Date"]].merge(
-        df_raw[merge_cols],
-        on=keys + [date_col],
-        how="left"
+    qty_list = [qty_col] if has_qty else []
+    src_cols = keys + [date_col, metric] + qty_list
+    df_grid  = grid[keys + [date_col, "Min_Date", "Max_Date"]].merge(
+        df[src_cols], on=keys + [date_col], how="left"
     )
     df_grid[metric] = df_grid[metric].fillna(0)
-    if qty_col and qty_col != "None":
-        df_grid[qty_col] = df_grid[qty_col].fillna(0)
+    for q in qty_list:
+        df_grid[q] = df_grid[q].fillna(0)
 
-    # Merge customer dates
     df_grid = df_grid.merge(cust_dates, on=customer_col, how="left")
-    if product_col and product_col != "None":
+    if has_prod:
         df_grid = df_grid.merge(prod_dates, on=keys, how="left")
+    else:
+        df_grid["Prod_Min_Date"] = df_grid["Cust_Min_Date"]
+        df_grid["Prod_Max_Date"] = df_grid["Cust_Max_Date"]
 
     df_grid = df_grid.sort_values(keys + [date_col])
 
-    # Run per lookback
+    # Extra dimension columns
+    for extra in [channel_col, region_col]:
+        if extra and extra != "None" and extra in df.columns:
+            emap = df.drop_duplicates(subset=[customer_col])[[customer_col, extra]]
+            df_grid = df_grid.merge(emap, on=customer_col, how="left", suffixes=("", "_x"))
+
     results = []
     for lb in lookback_months:
-        temp = df_grid.copy()
-        temp["Lookback"] = lb
+        t = df_grid.copy()
+        t["Lookback"] = lb
 
-        # Prior values
-        temp[f"Prior_{metric}"] = temp.groupby(keys)[metric].shift(1).fillna(0)
-        if qty_col and qty_col != "None":
-            temp[f"Prior_{qty_col}"] = temp.groupby(keys)[qty_col].shift(1).fillna(0)
+        t[f"Prior_{metric}"] = t.groupby(keys)[metric].shift(1).fillna(0)
+        for q in qty_list:
+            t[f"Prior_{q}"] = t.groupby(keys)[q].shift(1).fillna(0)
 
-        # Flags
-        temp["Expiry_Flag"] = np.where(temp[date_col] > temp["Max_Date"], 1, 0)
-        temp["DTE"] = np.where(temp["Expiry_Flag"] == 1, temp[f"Prior_{metric}"], 0)
+        t["Expiry_Flag"] = (t[date_col] > t["Max_Date"]).astype(int)
+        t["DTE"] = np.where(t["Expiry_Flag"] == 1, t[f"Prior_{metric}"], 0)
 
-        # Filter noise rows
-        mask = ~((temp[metric] == 0) & (temp[f"Prior_{metric}"] == 0) & (temp["DTE"] == 0))
-        temp = temp[mask].copy()
+        mask = ~((t[metric] == 0) & (t[f"Prior_{metric}"] == 0) & (t["DTE"] == 0))
+        t = t[mask].copy()
 
-        # Lookback date
-        temp["Lookback_Date"] = temp[date_col] - pd.DateOffset(months=lb)
-        temp["Lookback_Date"] = temp["Lookback_Date"] + pd.offsets.MonthEnd(0)
+        t["Lookback_Date"]  = (t[date_col] - pd.DateOffset(months=lb)) + pd.offsets.MonthEnd(0)
+        days_since          = (t[date_col] - t["Cust_Min_Date"]).dt.days
+        t["Past_Revenue"]   = np.where(days_since / 30 >= lb, "Yes", "No")
+        t["Future_Revenue"] = np.where(t["Cust_Max_Date"] > t[date_col], "Yes", "No")
 
-        # Past/Future flags
-        temp["Past_Revenue"] = np.where(
-            (temp[date_col] - temp["Cust_Min_Date"]).dt.days / 30 >= lb, "Yes", "No"
-        )
-        temp["Future_Revenue"] = np.where(
-            temp["Cust_Max_Date"] > temp[date_col], "Yes", "No"
-        )
-
-        # Bridge classification (vectorized)
-        if product_col and product_col != "None":
+        if has_prod:
             conditions = [
-                # New Logo
-                (temp[f"Prior_{metric}"] == 0) & (temp[metric] > 0) & (temp["Past_Revenue"] == "No") &
-                (temp["Cust_Min_Date"] > temp["Lookback_Date"]),
-                # Cross Sell
-                (temp[f"Prior_{metric}"] == 0) & (temp[metric] > 0) & (temp["Past_Revenue"] == "No") &
-                (temp["Prod_Min_Date"] > temp["Lookback_Date"]) & (temp["Cust_Min_Date"] <= temp["Lookback_Date"]),
-                # Other In
-                (temp[f"Prior_{metric}"] == 0) & (temp[metric] > 0) & (temp["Past_Revenue"] == "No") &
-                (temp["Prod_Min_Date"] <= temp["Lookback_Date"]),
-                # Returning
-                (temp[f"Prior_{metric}"] == 0) & (temp[metric] > 0) & (temp["Past_Revenue"] == "Yes"),
-                # Upsell
-                (temp[f"Prior_{metric}"] > 0) & (temp[metric] > temp[f"Prior_{metric}"]),
-                # Downsell
-                (temp[f"Prior_{metric}"] > 0) & (temp[metric] < temp[f"Prior_{metric}"]) & (temp[metric] > 0),
-                # Churn
-                (temp[f"Prior_{metric}"] > 0) & (temp[metric] == 0) & (temp["DTE"] > 0) &
-                (temp["Future_Revenue"] == "No") & (temp["Cust_Max_Date"] < temp[date_col]),
-                # Partial Churn
-                (temp[f"Prior_{metric}"] > 0) & (temp[metric] == 0) & (temp["DTE"] > 0) &
-                (temp["Future_Revenue"] == "No") & (temp["Cust_Max_Date"] >= temp[date_col]),
-                # Lapsed
-                (temp[metric] == 0) & (temp["Future_Revenue"] == "Yes"),
+                (t[f"Prior_{metric}"] == 0) & (t[metric] > 0) & (t["Past_Revenue"] == "No") & (t["Cust_Min_Date"] > t["Lookback_Date"]),
+                (t[f"Prior_{metric}"] == 0) & (t[metric] > 0) & (t["Past_Revenue"] == "No") & (t["Prod_Min_Date"] > t["Lookback_Date"]) & (t["Cust_Min_Date"] <= t["Lookback_Date"]),
+                (t[f"Prior_{metric}"] == 0) & (t[metric] > 0) & (t["Past_Revenue"] == "No") & (t["Prod_Min_Date"] <= t["Lookback_Date"]),
+                (t[f"Prior_{metric}"] == 0) & (t[metric] > 0) & (t["Past_Revenue"] == "Yes"),
+                (t[f"Prior_{metric}"] > 0) & (t[metric] > t[f"Prior_{metric}"]),
+                (t[f"Prior_{metric}"] > 0) & (t[metric] < t[f"Prior_{metric}"]) & (t[metric] > 0),
+                (t[f"Prior_{metric}"] > 0) & (t[metric] == 0) & (t["DTE"] > 0) & (t["Future_Revenue"] == "No") & (t["Cust_Max_Date"] < t[date_col]),
+                (t[f"Prior_{metric}"] > 0) & (t[metric] == 0) & (t["DTE"] > 0) & (t["Future_Revenue"] == "No") & (t["Cust_Max_Date"] >= t[date_col]),
+                (t[metric] == 0) & (t["Future_Revenue"] == "Yes"),
             ]
             choices = ["New Logo", "Cross Sell", "Other In", "Returning", "Upsell", "Downsell", "Churn", "Partial Churn", "Lapsed"]
         else:
             conditions = [
-                (temp[f"Prior_{metric}"] == 0) & (temp[metric] > 0) & (temp["Past_Revenue"] == "No"),
-                (temp[f"Prior_{metric}"] == 0) & (temp[metric] > 0) & (temp["Past_Revenue"] == "Yes"),
-                (temp[f"Prior_{metric}"] > 0) & (temp[metric] > temp[f"Prior_{metric}"]),
-                (temp[f"Prior_{metric}"] > 0) & (temp[metric] < temp[f"Prior_{metric}"]) & (temp[metric] > 0),
-                (temp[f"Prior_{metric}"] > 0) & (temp[metric] == 0) & (temp["Future_Revenue"] == "No"),
-                (temp[metric] == 0) & (temp["Future_Revenue"] == "Yes"),
+                (t[f"Prior_{metric}"] == 0) & (t[metric] > 0) & (t["Past_Revenue"] == "No"),
+                (t[f"Prior_{metric}"] == 0) & (t[metric] > 0) & (t["Past_Revenue"] == "Yes"),
+                (t[f"Prior_{metric}"] > 0) & (t[metric] > t[f"Prior_{metric}"]),
+                (t[f"Prior_{metric}"] > 0) & (t[metric] < t[f"Prior_{metric}"]) & (t[metric] > 0),
+                (t[f"Prior_{metric}"] > 0) & (t[metric] == 0) & (t["Future_Revenue"] == "No"),
+                (t[metric] == 0) & (t["Future_Revenue"] == "Yes"),
             ]
             choices = ["New Logo", "Returning", "Upsell", "Downsell", "Churn", "Lapsed"]
 
-        temp["Bridge"] = np.select(conditions, choices, default="No Change")
+        t["Bridge"]       = np.select(conditions, choices, default="No Change")
+        t["Bridge_Value"] = t[metric] - t[f"Prior_{metric}"]
+        t["Beginning_ARR"] = t[f"Prior_{metric}"]
+        t["Ending_ARR"]   = t[metric]
 
-        # Bridge value
-        temp["Bridge_Value"] = temp[metric] - temp[f"Prior_{metric}"]
-        temp["Beginning_ARR"] = temp[f"Prior_{metric}"]
-        temp["Ending_ARR"] = temp[metric]
+        if has_qty:
+            q = qty_list[0]
+            t["ASP"]          = t[metric]              / t[q].replace(0, np.nan)
+            t["Prior_ASP"]    = t[f"Prior_{metric}"]   / t[f"Prior_{q}"].replace(0, np.nan)
+            t["Volume_Impact"] = (t[q] - t[f"Prior_{q}"]) * t["Prior_ASP"].fillna(0)
+            t["Price_Impact"]  = (t["ASP"].fillna(0) - t["Prior_ASP"].fillna(0)) * t[f"Prior_{q}"].fillna(0)
+            t["PV_Misc"]       = t["Bridge_Value"] - (t["Volume_Impact"].fillna(0) + t["Price_Impact"].fillna(0))
 
-        # Price / Volume (if quantity provided)
-        if qty_col and qty_col != "None":
-            temp["ASP"] = temp[metric] / temp[qty_col].replace(0, np.nan)
-            temp["Prior_ASP"] = temp[f"Prior_{metric}"] / temp[f"Prior_{qty_col}"].replace(0, np.nan)
-            temp["Volume_Impact"] = (
-                (temp[qty_col] - temp[f"Prior_{qty_col}"]) *
-                temp["Prior_ASP"].fillna(0)
-            )
-            temp["Price_Impact"] = (
-                (temp["ASP"].fillna(0) - temp["Prior_ASP"].fillna(0)) *
-                temp[f"Prior_{qty_col}"].fillna(0)
-            )
-            temp["PV_Misc"] = temp["Bridge_Value"] - (
-                temp["Volume_Impact"].fillna(0) + temp["Price_Impact"].fillna(0)
-            )
+        t["Vintage"] = t["Cust_Min_Date"].dt.year
+        results.append(t)
 
-        # Vintage
-        temp["Vintage"] = temp["Cust_Min_Date"].dt.year
-
-        # Add extra dimension columns if present
-        for extra_col in [channel_col, region_col]:
-            if extra_col and extra_col != "None" and extra_col in df_raw.columns:
-                extra_map = df_raw.drop_duplicates(subset=[customer_col])[[customer_col, extra_col]]
-                temp = temp.merge(extra_map, on=customer_col, how="left", suffixes=("", "_extra"))
-
-        results.append(temp)
-
-    master = pd.concat(results, ignore_index=True)
-    return master
+    return pd.concat(results, ignore_index=True)
 
 
-def compute_retention_metrics(master, metric, lookback):
-    """Compute NRR, GRR from the master table for a given lookback."""
-    df = master[master["Lookback"] == lookback].copy()
-    active_rows = df[df["Beginning_ARR"] > 0].copy()
-    if active_rows.empty:
+def compute_retention(master, metric, lookback):
+    d = master[master["Lookback"] == lookback]
+    a = d[d["Beginning_ARR"] > 0]
+    if a.empty:
         return {"Beginning ARR": 0, "Ending ARR": 0, "NRR": 0, "GRR": 0, "New ARR": 0, "Lost ARR": 0}
-
-    beginning = active_rows["Beginning_ARR"].sum()
-    churn = active_rows.loc[active_rows["Bridge"].isin(["Churn", "Partial Churn"]), "Bridge_Value"].sum()
-    downsell = active_rows.loc[active_rows["Bridge"] == "Downsell", "Bridge_Value"].sum()
-    upsell = active_rows.loc[active_rows["Bridge"] == "Upsell", "Bridge_Value"].sum()
-    cross = active_rows.loc[active_rows["Bridge"] == "Cross Sell", "Bridge_Value"].sum()
-    new_arr = df.loc[df["Bridge"].isin(["New Logo"]), "Ending_ARR"].sum()
-    ending = df["Ending_ARR"].sum()
-
-    nrr = ((beginning + upsell + cross + churn + downsell) / beginning * 100) if beginning > 0 else 0
-    grr = ((beginning + churn + downsell) / beginning * 100) if beginning > 0 else 0
-
+    beg   = a["Beginning_ARR"].sum()
+    churn = a.loc[a["Bridge"].isin(["Churn", "Partial Churn"]), "Bridge_Value"].sum()
+    dw    = a.loc[a["Bridge"] == "Downsell",  "Bridge_Value"].sum()
+    up    = a.loc[a["Bridge"] == "Upsell",    "Bridge_Value"].sum()
+    cr    = a.loc[a["Bridge"] == "Cross Sell","Bridge_Value"].sum()
+    new_arr = d.loc[d["Bridge"] == "New Logo", "Ending_ARR"].sum()
+    ending  = d["Ending_ARR"].sum()
     return {
-        "Beginning ARR": beginning,
-        "Ending ARR": ending,
-        "NRR": round(nrr, 1),
-        "GRR": round(grr, 1),
-        "New ARR": new_arr,
-        "Lost ARR": churn + downsell,
+        "Beginning ARR": beg, "Ending ARR": ending,
+        "NRR": round((beg + up + cr + churn + dw) / beg * 100, 1) if beg else 0,
+        "GRR": round((beg + churn + dw)            / beg * 100, 1) if beg else 0,
+        "New ARR": new_arr, "Lost ARR": churn + dw,
     }
 
 
-def format_currency(val):
-    if abs(val) >= 1_000_000:
-        return f"${val/1_000_000:.1f}M"
-    elif abs(val) >= 1_000:
-        return f"${val/1_000:.0f}K"
-    else:
-        return f"${val:.0f}"
+# ─────────────────────────────────────────────────────────────────────────────
+# Page header
+# ─────────────────────────────────────────────────────────────────────────────
+titles = {
+    "Cohort Analytics":   ("Cohort Analytics",   "Segment customers, products and markets into ranked cohorts"),
+    "Customer Analytics": ("Customer Analytics",  "ARR bridge, retention trends, top movers and pricing analysis"),
+}
+pt, ps = titles.get(module, (module, ""))
+st.markdown(f'<div class="page-title">{pt}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="page-subtitle">{ps}</div>', unsafe_allow_html=True)
 
+left, right = st.columns([1, 1.75], gap="large")
 
-# ---------------------------------------------------------
-# MAIN PAGE HEADER
-# ---------------------------------------------------------
-st.markdown(f'<div class="page-title">{"Cohort Analytics" if module == "Cohort Analytics" else "Customer Analytics"}</div>', unsafe_allow_html=True)
-st.markdown('<div class="page-subtitle">Upload your dataset, map columns, and run analytics</div>', unsafe_allow_html=True)
-
-left, right = st.columns([1, 1.7], gap="large")
-
-# ---------------------------------------------------------
-# LEFT PANEL — Upload & Map
-# ---------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# LEFT PANEL
+# ─────────────────────────────────────────────────────────────────────────────
 with left:
-    # Step indicator
-    data_loaded = st.session_state.validated_df is not None
+    data_ok = st.session_state.validated_df is not None
+    s1 = "done" if data_ok else "active"
+    s2 = "done" if data_ok else "inactive"
+    s3 = "active" if data_ok else "inactive"
+    la = "step-label-a"
+    li = "step-label-i"
     st.markdown(f"""
     <div class="step-row">
-        <div class="step-item">
-            <div class="step-num-{'done' if data_loaded else 'active'}">1</div>
-            <span class="step-label-active">Upload</span>
-        </div>
-        <div class="step-divider"></div>
-        <div class="step-item">
-            <div class="step-num-{'done' if data_loaded else 'inactive'}">2</div>
-            <span class="step-label-{'active' if data_loaded else 'inactive'}">Map</span>
-        </div>
-        <div class="step-divider"></div>
-        <div class="step-item">
-            <div class="step-num-{'active' if data_loaded else 'inactive'}">3</div>
-            <span class="step-label-{'active' if data_loaded else 'inactive'}">Analyze</span>
-        </div>
+      <div class="step-{s1}">1</div>
+      <span class="{la}">Upload</span>
+      <div class="step-line"></div>
+      <div class="step-{s2}">2</div>
+      <span class="{la if data_ok else li}">Map</span>
+      <div class="step-line"></div>
+      <div class="step-{s3}">3</div>
+      <span class="{la if data_ok else li}">Analyse</span>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
-
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"], label_visibility="collapsed")
 
     if uploaded_file:
-        raw_df = load_file(uploaded_file)
+        raw_df  = load_file(uploaded_file)
+        raw_df.columns = raw_df.columns.str.strip()
         columns = raw_df.columns.tolist()
 
-        st.markdown('<div class="section-header">Dataset Type</div>', unsafe_allow_html=True)
-        dataset_type = st.radio(
-            "",
-            ["Revenue Dataset", "Billing Dataset", "Bookings Dataset"],
-            label_visibility="collapsed",
-            horizontal=True
+        st.markdown('<div class="section-hdr">Dataset Type</div>', unsafe_allow_html=True)
+        dataset_type = st.radio("", ["Revenue Dataset", "Billing Dataset", "Bookings Dataset"],
+                                horizontal=True, label_visibility="collapsed")
+
+        metric_label = (
+            "ACV / TCV Column"    if dataset_type == "Bookings Dataset"
+            else "Billing Amount" if dataset_type == "Billing Dataset"
+            else "MRR / ARR Column"
         )
-        st.session_state.dataset_type = dataset_type
 
-        if dataset_type == "Bookings Dataset":
-            metric_label = "ACV / TCV Column"
-        elif dataset_type == "Billing Dataset":
-            metric_label = "Billing Amount Column"
-        else:
-            metric_label = "MRR / ARR Column"
-
-        st.markdown('<div class="section-header">Column Mapping</div>', unsafe_allow_html=True)
-
-        metric = st.selectbox(metric_label, columns)
+        st.markdown('<div class="section-hdr">Column Mapping</div>', unsafe_allow_html=True)
+        metric       = st.selectbox(metric_label, columns)
         customer_col = st.selectbox("Customer Column", columns)
-        date_col = st.selectbox("Date Column", columns)
-        product_col = st.selectbox("Product Column", ["None"] + columns)
-        channel_col = st.selectbox("Channel Column", ["None"] + columns)
-        region_col = st.selectbox("Geography / Region Column", ["None"] + columns)
-        fiscal_col = st.selectbox("Fiscal Year Column", ["None"] + columns)
-        qty_col = st.selectbox("Quantity Column (optional)", ["None"] + columns)
+        date_col     = st.selectbox("Date Column", columns)
+        product_col  = st.selectbox("Product Column",  ["None"] + columns)
+        channel_col  = st.selectbox("Channel Column",  ["None"] + columns)
+        region_col   = st.selectbox("Geography / Region Column", ["None"] + columns)
+        fiscal_col   = st.selectbox("Fiscal Year Column", ["None"] + columns)
+        qty_col      = st.selectbox("Quantity Column (optional)", ["None"] + columns)
 
         if st.button("✓  Validate Data"):
             raw_df[date_col] = pd.to_datetime(raw_df[date_col], errors="coerce")
             st.session_state.validated_df = raw_df
-            st.session_state.mapping = {
-                "metric": metric,
-                "customer_col": customer_col,
-                "date_col": date_col,
-                "product_col": product_col,
-                "channel_col": channel_col,
-                "region_col": region_col,
-                "fiscal_col": fiscal_col,
-                "qty_col": qty_col,
-            }
-            st.success(f"✓ Data validated — {len(raw_df):,} rows loaded")
+            st.session_state.mapping = dict(
+                metric=metric, customer_col=customer_col, date_col=date_col,
+                product_col=product_col, channel_col=channel_col,
+                region_col=region_col, fiscal_col=fiscal_col, qty_col=qty_col,
+            )
+            st.session_state.result = None
+            st.success(f"✓  {len(raw_df):,} rows validated")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------------------------------------------------------
-    # COHORT CONFIGURATION (LEFT PANEL, shown only for cohort module)
-    # ---------------------------------------------------------
-    if st.session_state.validated_df is not None and module == "Cohort Analytics":
-        df = st.session_state.validated_df
-        m = st.session_state.mapping
-        metric = m["metric"]
+    # ── Cohort config ──────────────────────────────────────────────────────
+    if data_ok and module == "Cohort Analytics":
+        df = st.session_state.validated_df.copy()
+        m  = st.session_state.mapping
+        metric     = m["metric"]
         fiscal_col = m["fiscal_col"]
-        columns = df.columns.tolist()
+        columns    = df.columns.tolist()
 
-        # Fiscal filter
         if fiscal_col != "None":
-            st.markdown('<div class="section-header">Period Filter</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-hdr">Period Filter</div>', unsafe_allow_html=True)
             fy_vals = sorted(df[fiscal_col].dropna().unique())
             logic = st.selectbox("Period Logic", ["All Periods", "Latest Period", "Select Fiscal Year"])
             if logic == "Latest Period":
@@ -892,53 +901,47 @@ with left:
                 fy = st.selectbox("Fiscal Year", fy_vals)
                 df = df[df[fiscal_col] == fy]
 
-        st.markdown('<div class="section-header">Individual Cohorts</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-hdr">Individual Cohorts</div>', unsafe_allow_html=True)
         individual_cols = st.multiselect("Select Columns", columns)
 
-        st.markdown('<div class="section-header">Hierarchical Cohorts</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-hdr">Hierarchical Cohorts</div>', unsafe_allow_html=True)
         hierarchy_count = st.number_input("Number of Hierarchies", 0, 10, 0)
         hierarchies = []
         for i in range(hierarchy_count):
-            hcols = st.multiselect(f"Hierarchy {i+1}", columns, key=f"h_{i}")
-            if hcols:
-                hierarchies.append(hcols)
+            hc = st.multiselect(f"Hierarchy {i+1}", columns, key=f"h_{i}")
+            if hc:
+                hierarchies.append(hc)
 
-        st.markdown('<div class="section-header">Cohort Types</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-hdr">Cohort Types</div>', unsafe_allow_html=True)
         sg = st.checkbox("Size Group (SG_)")
         pc = st.checkbox("Percentile (PC_)")
         rc = st.checkbox("Revenue Contribution (RC_)")
 
-        if st.button("⚡  Analyze Metrics"):
+        if st.button("⚡  Analyse Metrics"):
             result = df.copy()
             for col in individual_cols:
                 for flag, ct in [(sg, "SG"), (pc, "PC"), (rc, "RC")]:
                     if flag:
                         t = cohort_engine(df, metric, [col], ct)
                         result = result.merge(t[[col, f"{ct}_{col}"]], on=col, how="left")
-            for group in hierarchies:
-                name = "_".join(group)
+            for grp in hierarchies:
+                nm = "_".join(grp)
                 for flag, ct in [(sg, "SG"), (pc, "PC"), (rc, "RC")]:
                     if flag:
-                        t = cohort_engine(df, metric, group, ct)
-                        result = result.merge(t[group + [f"{ct}_{name}"]], on=group, how="left")
+                        t = cohort_engine(df, metric, grp, ct)
+                        result = result.merge(t[grp + [f"{ct}_{nm}"]], on=grp, how="left")
             st.session_state.result = result
+            st.session_state._cohort_df = df
 
-    # ---------------------------------------------------------
-    # CUSTOMER ANALYTICS CONFIGURATION (LEFT PANEL)
-    # ---------------------------------------------------------
-    if st.session_state.validated_df is not None and module == "Customer Analytics":
-        st.markdown('<div class="section-header">Analytics Settings</div>', unsafe_allow_html=True)
-        lookback_options = st.multiselect(
-            "Lookback Windows",
-            [1, 3, 6, 12],
-            default=[1, 12],
-            help="Select lookback periods (months) for retention bridge analysis"
-        )
+    # ── Customer analytics config ──────────────────────────────────────────
+    if data_ok and module == "Customer Analytics":
+        st.markdown('<div class="section-hdr">Analytics Settings</div>', unsafe_allow_html=True)
+        lb_choices = st.multiselect("Lookback Windows (months)", [1, 3, 6, 12], default=[1, 12])
 
         if st.button("⚡  Run Customer Analytics"):
-            m = st.session_state.mapping
+            m  = st.session_state.mapping
             df = st.session_state.validated_df.copy()
-            with st.spinner("Running analytics engine..."):
+            with st.spinner("Running revenue bridge engine…"):
                 master = run_customer_analytics(
                     df_raw=df,
                     customer_col=m["customer_col"],
@@ -948,123 +951,122 @@ with left:
                     qty_col=m["qty_col"],
                     channel_col=m["channel_col"],
                     region_col=m["region_col"],
-                    lookback_months=lookback_options if lookback_options else [1, 12],
+                    lookback_months=lb_choices if lb_choices else [1, 12],
                 )
-            st.session_state.result = master
-            st.session_state.lookbacks = lookback_options if lookback_options else [1, 12]
-            st.success("✓ Analytics complete")
+            st.session_state.result   = master
+            st.session_state.lookbacks = lb_choices if lb_choices else [1, 12]
+            st.success("✓  Analytics complete")
 
-# ---------------------------------------------------------
-# RIGHT PANEL — Analytics Dashboard
-# ---------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# RIGHT PANEL
+# ─────────────────────────────────────────────────────────────────────────────
 with right:
 
-    # ============================================================
-    # COHORT ANALYTICS RIGHT PANEL
-    # ============================================================
+    # ════════════════════════════════════════════════════════════════
+    # COHORT ANALYTICS
+    # ════════════════════════════════════════════════════════════════
     if module == "Cohort Analytics":
 
-        if st.session_state.result is not None and st.session_state.validated_df is not None:
-            result = st.session_state.result
-            m = st.session_state.mapping
-            metric = m["metric"]
-            fiscal_col = m["fiscal_col"]
+        if st.session_state.result is not None:
+            result       = st.session_state.result
+            m            = st.session_state.mapping
+            metric       = m["metric"]
+            fiscal_col   = m["fiscal_col"]
             customer_col = m["customer_col"]
-            df = st.session_state.validated_df
-
+            date_col     = m["date_col"]
+            df_used = st.session_state.get("_cohort_df", st.session_state.validated_df)
             cohort_cols = [c for c in result.columns if c.startswith(("SG_", "PC_", "RC_"))]
 
             tab1, tab2, tab3 = st.tabs(["Summary", "Cohort Analytics", "Output"])
 
+            # ── Summary ──────────────────────────────────────────────
             with tab1:
-                # KPI cards
-                total_rev = df[metric].sum()
-                customers = df[customer_col].nunique() if customer_col != "None" else 0
-                rev_per_cust = total_rev / customers if customers > 0 else 0
+                total_rev = df_used[metric].sum()
+                n_cust    = df_used[customer_col].nunique() if customer_col != "None" else 0
+                rpc       = total_rev / n_cust if n_cust else 0
 
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    st.markdown(f"""
-                    <div class="metric-card">
+                    st.markdown(f"""<div class="metric-card-accent">
                         <div class="metric-label">Total Revenue</div>
-                        <div class="metric-value">{format_currency(total_rev)}</div>
+                        <div class="metric-value-lg">{fmt_currency(total_rev)}</div>
                     </div>""", unsafe_allow_html=True)
                 with c2:
-                    st.markdown(f"""
-                    <div class="metric-card">
+                    st.markdown(f"""<div class="metric-card">
                         <div class="metric-label">Customers</div>
-                        <div class="metric-value">{customers:,}</div>
+                        <div class="metric-value">{n_cust:,}</div>
                     </div>""", unsafe_allow_html=True)
                 with c3:
-                    st.markdown(f"""
-                    <div class="metric-card">
+                    st.markdown(f"""<div class="metric-card">
                         <div class="metric-label">Revenue / Customer</div>
-                        <div class="metric-value">{format_currency(rev_per_cust)}</div>
+                        <div class="metric-value">{fmt_currency(rpc)}</div>
                     </div>""", unsafe_allow_html=True)
 
                 st.markdown("")
 
-                # Revenue by fiscal year
                 if fiscal_col != "None":
-                    fy_summary = df.groupby(fiscal_col).agg(
+                    fy = df_used.groupby(fiscal_col).agg(
                         Revenue=(metric, "sum"),
-                        Customers=(customer_col, "nunique")
+                        Customers=(customer_col, "nunique"),
                     ).reset_index()
-                    fy_summary["Rev_per_Cust"] = fy_summary["Revenue"] / fy_summary["Customers"]
+                    fy["Rev_per_Cust"] = fy["Revenue"] / fy["Customers"]
 
-                    fig = go.Figure()
-                    fig.add_bar(x=fy_summary[fiscal_col], y=fy_summary["Revenue"],
-                                name="Revenue", marker_color="#3B82F6", opacity=0.85)
-                    fig.add_trace(go.Scatter(
-                        x=fy_summary[fiscal_col], y=fy_summary["Revenue"],
-                        mode="lines+markers", name="Trend",
-                        line=dict(color="#8B5CF6", width=2),
-                        marker=dict(size=6, color="#8B5CF6")
-                    ))
-                    fig.update_layout(title="Revenue by Fiscal Year", **PLOTLY_LAYOUT)
-                    st.plotly_chart(fig, use_container_width=True)
+                    fig_fy = go.Figure()
+                    fig_fy.add_bar(x=fy[fiscal_col], y=fy["Revenue"],
+                                   name="Revenue", marker_color=BRAND_BLUE, opacity=0.8)
+                    fig_fy.add_scatter(x=fy[fiscal_col], y=fy["Revenue"],
+                                       mode="lines+markers", name="Trend",
+                                       line=dict(color="#E8611A", width=2),
+                                       marker=dict(size=5, color="#E8611A"))
+                    ly = base_layout("Revenue by Fiscal Year")
+                    ly["xaxis"] = LIGHT_AXIS
+                    ly["yaxis"] = LIGHT_AXIS
+                    fig_fy.update_layout(**ly)
+                    st.plotly_chart(fig_fy, use_container_width=True)
 
                     c1, c2 = st.columns(2)
                     with c1:
-                        fig2 = px.bar(fy_summary, x=fiscal_col, y="Customers",
-                                      title="Customers by Fiscal Year",
-                                      color_discrete_sequence=["#34D399"])
-                        fig2.update_layout(**PLOTLY_LAYOUT)
+                        fig2 = px.bar(fy, x=fiscal_col, y="Customers",
+                                      color_discrete_sequence=["#00897B"])
+                        ly2 = base_layout("Customers by Fiscal Year")
+                        ly2["xaxis"] = LIGHT_AXIS
+                        ly2["yaxis"] = LIGHT_AXIS
+                        fig2.update_layout(**ly2)
                         st.plotly_chart(fig2, use_container_width=True)
                     with c2:
-                        fig3 = px.bar(fy_summary, x=fiscal_col, y="Rev_per_Cust",
-                                      title="Revenue per Customer",
-                                      color_discrete_sequence=["#FCD34D"])
-                        fig3.update_layout(**PLOTLY_LAYOUT)
+                        fig3 = px.bar(fy, x=fiscal_col, y="Rev_per_Cust",
+                                      color_discrete_sequence=["#F4A900"])
+                        ly3 = base_layout("Revenue per Customer")
+                        ly3["xaxis"] = LIGHT_AXIS
+                        ly3["yaxis"] = LIGHT_AXIS
+                        fig3.update_layout(**ly3)
                         st.plotly_chart(fig3, use_container_width=True)
 
-                # Segmentation
                 if customer_col != "None":
-                    seg = df.groupby(customer_col)[metric].sum().reset_index()
+                    seg = df_used.groupby(customer_col)[metric].sum().reset_index()
                     seg["Rank"] = seg[metric].rank(method="dense", ascending=False)
-                    seg["Pct"] = seg["Rank"] / seg["Rank"].max()
-                    seg["Segment"] = pd.cut(seg["Pct"], bins=[0, .05, .1, .2, 1],
-                                            labels=["Top 5%", "Top 10%", "Top 20%", "Long Tail"])
-                    pie_data = seg.groupby("Segment")[metric].sum().reset_index()
-                    fig4 = px.pie(pie_data, names="Segment", values=metric,
-                                  title="Customer Segmentation",
-                                  color_discrete_sequence=["#3B82F6", "#8B5CF6", "#34D399", "#6B7A99"])
-                    fig4.update_layout(**PLOTLY_LAYOUT)
-                    fig4.update_traces(textfont_color="#E8EAF0")
+                    seg["Pct"]  = seg["Rank"] / seg["Rank"].max()
+                    seg["Segment"] = pd.cut(seg["Pct"], bins=[0,.05,.1,.2,1],
+                                            labels=["Top 5%","Top 10%","Top 20%","Long Tail"])
+                    pie = seg.groupby("Segment")[metric].sum().reset_index()
+                    fig4 = px.pie(pie, names="Segment", values=metric,
+                                  color_discrete_sequence=[BRAND_BLUE,"#E8611A","#00897B","#CBD5E1"])
+                    ly4 = base_layout("Customer Segmentation")
+                    fig4.update_layout(**ly4)
                     st.plotly_chart(fig4, use_container_width=True)
 
+            # ── Cohort Heatmaps ───────────────────────────────────────
             with tab2:
-                # Cohort heatmap
-                date_col = m["date_col"]
                 if customer_col != "None" and date_col != "None":
                     try:
-                        hdf = df.copy()
+                        hdf = st.session_state.validated_df.copy()
                         hdf[date_col] = pd.to_datetime(hdf[date_col])
-                        hdf["OrderMonth"] = hdf[date_col].dt.to_period("M").astype(str)
-                        cohort_map = hdf.groupby(customer_col)["OrderMonth"].min()
-                        hdf["CohortMonth"] = hdf[customer_col].map(cohort_map)
+                        hdf["OrderMonth"]  = hdf[date_col].dt.to_period("M").astype(str)
+                        cmap = hdf.groupby(customer_col)["OrderMonth"].min()
+                        hdf["CohortMonth"] = hdf[customer_col].map(cmap)
                         hdf["CohortIndex"] = (
-                            pd.to_datetime(hdf["OrderMonth"]) - pd.to_datetime(hdf["CohortMonth"])
+                            pd.to_datetime(hdf["OrderMonth"]) -
+                            pd.to_datetime(hdf["CohortMonth"])
                         ).dt.days // 30
 
                         pivot = pd.pivot_table(
@@ -1073,286 +1075,317 @@ with right:
                         ).fillna(0)
 
                         fig_h = px.imshow(pivot, text_auto=True,
-                                          color_continuous_scale="Blues",
-                                          title="Cohort Heatmap — Customer Count",
-                                          aspect="auto")
-                        fig_h.update_layout(**PLOTLY_LAYOUT)
+                                          color_continuous_scale="Blues", aspect="auto")
+                        ly_h = base_layout("Cohort Heatmap — Customer Count", height=420)
+                        ly_h["xaxis"] = dict(**LIGHT_AXIS, title="Month Index")
+                        ly_h["yaxis"] = dict(**LIGHT_AXIS, title="Cohort Month")
+                        fig_h.update_layout(**ly_h)
                         st.plotly_chart(fig_h, use_container_width=True)
 
-                        retention = pivot.divide(pivot.iloc[:, 0], axis=0) * 100
-                        fig_r = px.imshow(retention, text_auto=".0f",
-                                          color_continuous_scale="Greens",
-                                          title="Retention % by Cohort",
-                                          aspect="auto")
-                        fig_r.update_layout(**PLOTLY_LAYOUT)
+                        ret = pivot.divide(pivot.iloc[:, 0], axis=0) * 100
+                        fig_r = px.imshow(ret, text_auto=".0f",
+                                          color_continuous_scale="RdYlGn", aspect="auto")
+                        ly_r = base_layout("Retention % by Cohort", height=420)
+                        ly_r["xaxis"] = dict(**LIGHT_AXIS, title="Month Index")
+                        ly_r["yaxis"] = dict(**LIGHT_AXIS, title="Cohort Month")
+                        fig_r.update_layout(**ly_r)
                         st.plotly_chart(fig_r, use_container_width=True)
+
                     except Exception as e:
-                        st.warning(f"Cohort heatmap unavailable: {e}")
+                        st.warning(f"Cohort heatmap error: {e}")
                 else:
                     st.info("Map Customer and Date columns to see the cohort heatmap.")
 
+            # ── Output ───────────────────────────────────────────────
             with tab3:
-                st.markdown(f'<div class="section-header">Cohort Output — {len(result):,} rows · {len(cohort_cols)} cohort columns added</div>', unsafe_allow_html=True)
-                st.dataframe(result, use_container_width=True, height=400)
-                csv = result.to_csv(index=False)
+                st.markdown(
+                    f'<div class="section-hdr">{len(result):,} rows · {len(cohort_cols)} cohort columns</div>',
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(result, use_container_width=True, height=420)
+                csv_out = result.to_csv(index=False)
                 if st.session_state.user_email == ADMIN_EMAIL:
-                    st.download_button("⬇  Download Output", csv, "cohort_output.csv", use_container_width=True)
+                    st.download_button("⬇  Download Output", csv_out, "cohort_output.csv", use_container_width=True)
                 else:
-                    st.download_button("⬇  Download Output", csv, disabled=True, use_container_width=True)
+                    st.download_button("⬇  Download Output", csv_out, disabled=True, use_container_width=True)
                     st.warning("🔒 Download is available only for subscribed users.")
 
-        elif st.session_state.validated_df is None:
+        else:
             st.markdown("""
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;text-align:center;">
-                <div style="font-size:48px;margin-bottom:16px;">📊</div>
-                <div style="font-size:20px;font-weight:600;color:#E8EAF0;margin-bottom:8px;">Upload your dataset to begin</div>
-                <div style="font-size:13px;color:#6B7A99;">Map your columns and click Validate Data to get started</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div style="display:flex;flex-direction:column;align-items:center;
+                        justify-content:center;padding:80px 40px;text-align:center;">
+              <div style="font-size:48px;margin-bottom:16px;">📊</div>
+              <div style="font-size:18px;font-weight:600;color:#1A1D23;margin-bottom:8px;">
+                Upload your dataset to begin</div>
+              <div style="font-size:13px;color:#8C95A6;">
+                Map columns on the left, then configure and run cohort analysis</div>
+            </div>""", unsafe_allow_html=True)
 
-    # ============================================================
-    # CUSTOMER ANALYTICS RIGHT PANEL
-    # ============================================================
+    # ════════════════════════════════════════════════════════════════
+    # CUSTOMER ANALYTICS
+    # ════════════════════════════════════════════════════════════════
     elif module == "Customer Analytics":
+        master = st.session_state.result
+        has_bridge = (
+            master is not None and
+            isinstance(master, pd.DataFrame) and
+            "Bridge" in master.columns
+        )
 
-        if st.session_state.result is not None and isinstance(st.session_state.result, pd.DataFrame) and "Bridge" in st.session_state.result.columns:
-
-            master = st.session_state.result
-            m = st.session_state.mapping
-            metric = m["metric"]
+        if has_bridge:
+            m            = st.session_state.mapping
+            metric       = m["metric"]
             customer_col = m["customer_col"]
-            date_col = m["date_col"]
-            lookbacks = st.session_state.get("lookbacks", [1, 12])
+            date_col     = m["date_col"]
+            region_col   = m["region_col"]
+            lookbacks    = st.session_state.lookbacks
 
-            # Lookback selector
-            selected_lb = st.selectbox(
-                "Lookback Window",
-                lookbacks,
-                format_func=lambda x: f"{x} Month{'s' if x > 1 else ''}",
-            )
+            sel_lb  = st.selectbox("Lookback Window", lookbacks,
+                                   format_func=lambda x: f"{x} Month{'s' if x > 1 else ''}")
+            metrics = compute_retention(master, metric, sel_lb)
+            df_lb   = master[master["Lookback"] == sel_lb].copy()
 
-            metrics = compute_retention_metrics(master, metric, selected_lb)
-            df_lb = master[master["Lookback"] == selected_lb].copy()
-
-            # KPI row
-            c1, c2, c3, c4, c5, c6 = st.columns(6)
-            cards = [
-                ("Total ARR", format_currency(metrics["Ending ARR"]), ""),
-                ("New ARR", format_currency(metrics["New ARR"]), "pos"),
-                ("Lost ARR", format_currency(metrics["Lost ARR"]), "neg"),
-                ("Net Retention", f"{metrics['NRR']}%", "pos" if metrics["NRR"] >= 100 else "neg"),
-                ("Gross Retention", f"{metrics['GRR']}%", "pos" if metrics["GRR"] >= 80 else "neg"),
-                ("Beginning ARR", format_currency(metrics["Beginning ARR"]), ""),
+            # KPI cards
+            kpi_items = [
+                ("Total ARR",       fmt_currency(metrics["Ending ARR"]),    "accent"),
+                ("New ARR",         fmt_currency(metrics["New ARR"]),        "pos"),
+                ("Lost ARR",        fmt_currency(metrics["Lost ARR"]),       "neg"),
+                ("Net Retention",   f"{metrics['NRR']}%",  "pos" if metrics["NRR"] >= 100 else "neg"),
+                ("Gross Retention", f"{metrics['GRR']}%",  "pos" if metrics["GRR"] >= 80  else "neg"),
+                ("Beginning ARR",   fmt_currency(metrics["Beginning ARR"]), "neutral"),
             ]
-            for col_obj, (label, val, chg_class) in zip([c1, c2, c3, c4, c5, c6], cards):
+            kpi_cols = st.columns(6)
+            for col_obj, (label, val, style) in zip(kpi_cols, kpi_items):
+                top_border = "border-top:3px solid #0047AB;" if style == "accent" else ""
                 with col_obj:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">{label}</div>
-                        <div class="metric-value" style="font-size:20px;">{val}</div>
-                    </div>""", unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="metric-card" style="{top_border}">'
+                        f'<div class="metric-label">{label}</div>'
+                        f'<div class="metric-value" style="font-size:17px;">{val}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
 
             st.markdown("")
+            tab1, tab2, tab3, tab4 = st.tabs(
+                ["Revenue Bridge", "Top Customers", "Retention Trends", "Output"]
+            )
 
-            tab1, tab2, tab3, tab4 = st.tabs(["Revenue Bridge", "Top Customers", "Retention Trends", "Output"])
-
+            # ── Revenue Bridge ────────────────────────────────────────
             with tab1:
-                # Waterfall bridge chart
-                bridge_agg = df_lb.groupby("Bridge")["Bridge_Value"].sum().reset_index()
-                bridge_agg = bridge_agg[bridge_agg["Bridge"] != "No Change"]
-                bridge_agg["Color"] = bridge_agg["Bridge"].map(BRIDGE_COLORS).fillna("#6B7A99")
-                bridge_agg = bridge_agg.sort_values("Bridge_Value", ascending=False)
+                ba = df_lb.groupby("Bridge")["Bridge_Value"].sum().reset_index()
+                ba = ba[ba["Bridge"] != "No Change"].copy()
+                ba["Color"] = ba["Bridge"].map(BRIDGE_COLORS).fillna("#CBD5E1")
+                ba = ba.sort_values("Bridge_Value", ascending=False)
 
                 fig_b = go.Figure(go.Bar(
-                    x=bridge_agg["Bridge"],
-                    y=bridge_agg["Bridge_Value"],
-                    marker_color=bridge_agg["Color"],
-                    text=[format_currency(v) for v in bridge_agg["Bridge_Value"]],
+                    x=ba["Bridge"], y=ba["Bridge_Value"],
+                    marker_color=ba["Color"].tolist(),
+                    text=[fmt_currency(v) for v in ba["Bridge_Value"]],
                     textposition="outside",
-                    textfont=dict(color="#8892A4", size=11),
+                    textfont=dict(color="#5A6478", size=11),
                 ))
-                fig_b.update_layout(title=f"Revenue Bridge ({selected_lb}M Lookback)", **PLOTLY_LAYOUT)
+                ly_b = base_layout(f"Revenue Bridge — {sel_lb}M Lookback")
+                ly_b["xaxis"] = LIGHT_AXIS
+                ly_b["yaxis"] = LIGHT_AXIS
+                fig_b.update_layout(**ly_b)
                 st.plotly_chart(fig_b, use_container_width=True)
 
-                # Revenue bridge by period
                 if date_col in df_lb.columns:
-                    bridge_period = (
-                        df_lb.groupby([date_col, "Bridge"])["Bridge_Value"]
-                        .sum()
-                        .reset_index()
-                    )
-                    bridge_period = bridge_period[bridge_period["Bridge"] != "No Change"]
-                    top_bridges = bridge_period.groupby("Bridge")["Bridge_Value"].sum().abs().nlargest(6).index.tolist()
-                    bridge_period = bridge_period[bridge_period["Bridge"].isin(top_bridges)]
-
-                    fig_bp = px.bar(
-                        bridge_period,
-                        x=date_col, y="Bridge_Value", color="Bridge",
-                        title=f"Revenue Movement Over Time",
-                        color_discrete_map=BRIDGE_COLORS,
-                        barmode="relative"
-                    )
-                    fig_bp.update_layout(**PLOTLY_LAYOUT)
+                    bp = df_lb.groupby([date_col, "Bridge"])["Bridge_Value"].sum().reset_index()
+                    bp = bp[bp["Bridge"] != "No Change"]
+                    top6 = bp.groupby("Bridge")["Bridge_Value"].sum().abs().nlargest(6).index
+                    bp   = bp[bp["Bridge"].isin(top6)]
+                    fig_bp = px.bar(bp, x=date_col, y="Bridge_Value", color="Bridge",
+                                    color_discrete_map=BRIDGE_COLORS, barmode="relative")
+                    ly_bp = base_layout("Revenue Movement Over Time")
+                    ly_bp["xaxis"] = LIGHT_AXIS
+                    ly_bp["yaxis"] = LIGHT_AXIS
+                    fig_bp.update_layout(**ly_bp)
                     st.plotly_chart(fig_bp, use_container_width=True)
 
-                # Price vs Volume (if available)
                 if "Price_Impact" in df_lb.columns:
-                    pv_sum = {
-                        "Price Impact": df_lb["Price_Impact"].fillna(0).sum(),
+                    pv = {
+                        "Price Impact":  df_lb["Price_Impact"].fillna(0).sum(),
                         "Volume Impact": df_lb["Volume_Impact"].fillna(0).sum(),
-                        "Mix / Other": df_lb["PV_Misc"].fillna(0).sum(),
+                        "Mix / Other":   df_lb["PV_Misc"].fillna(0).sum(),
                     }
-                    pv_df = pd.DataFrame({"Driver": list(pv_sum.keys()), "Value": list(pv_sum.values())})
-                    fig_pv = px.bar(pv_df, x="Driver", y="Value",
-                                    title="Price vs Volume Decomposition",
-                                    color="Driver",
-                                    color_discrete_sequence=["#3B82F6", "#34D399", "#FCD34D"])
-                    fig_pv.update_layout(**PLOTLY_LAYOUT)
+                    pv_df = pd.DataFrame({"Driver": list(pv.keys()), "Value": list(pv.values())})
+                    fig_pv = px.bar(pv_df, x="Driver", y="Value", color="Driver",
+                                    color_discrete_sequence=[BRAND_BLUE, "#00897B", "#F4A900"])
+                    ly_pv = base_layout("Price vs Volume Decomposition")
+                    ly_pv["xaxis"] = LIGHT_AXIS
+                    ly_pv["yaxis"] = LIGHT_AXIS
+                    fig_pv.update_layout(**ly_pv)
                     st.plotly_chart(fig_pv, use_container_width=True)
 
+            # ── Top Customers ─────────────────────────────────────────
             with tab2:
-                # Top customers
-                top_df = df_lb.groupby(customer_col).agg(
-                    Ending_ARR=(metric, "sum"),
-                    ARR_Change=("Bridge_Value", "sum"),
-                ).reset_index().sort_values("Ending_ARR", ascending=False).head(20)
-                top_df["Ending_ARR_Fmt"] = top_df["Ending_ARR"].apply(format_currency)
-                top_df["ARR_Change_Fmt"] = top_df["ARR_Change"].apply(format_currency)
+                top_df = (
+                    df_lb.groupby(customer_col)
+                    .agg(Ending_ARR=(metric, "sum"), ARR_Change=("Bridge_Value", "sum"))
+                    .reset_index()
+                    .sort_values("Ending_ARR", ascending=False)
+                    .head(20)
+                )
+                top10 = top_df.head(10).sort_values("Ending_ARR")
 
                 fig_top = go.Figure(go.Bar(
-                    x=top_df["Ending_ARR"].head(10),
-                    y=top_df[customer_col].head(10),
+                    x=top10["Ending_ARR"],
+                    y=top10[customer_col],
                     orientation="h",
-                    marker_color="#3B82F6",
-                    text=[format_currency(v) for v in top_df["Ending_ARR"].head(10)],
+                    marker_color=BRAND_BLUE,
+                    text=[fmt_currency(v) for v in top10["Ending_ARR"]],
                     textposition="outside",
-                    textfont=dict(color="#8892A4", size=11),
+                    textfont=dict(color="#5A6478", size=11),
                 ))
-                fig_top.update_layout(title="Top 10 Customers by ARR",
-                                       yaxis=dict(autorange="reversed"),
-                                       **PLOTLY_LAYOUT)
+                ly_top = base_layout("Top 10 Customers by ARR", height=380)
+                ly_top["xaxis"] = LIGHT_AXIS
+                ly_top["yaxis"] = LIGHT_AXIS_REV
+                fig_top.update_layout(**ly_top)
                 st.plotly_chart(fig_top, use_container_width=True)
 
-                # Top movers
-                top_up = df_lb.groupby(customer_col)["Bridge_Value"].sum().reset_index()
-                col_u, col_d = st.columns(2)
+                mover = df_lb.groupby(customer_col)["Bridge_Value"].sum().reset_index()
+                cu, cd = st.columns(2)
 
-                with col_u:
-                    upsell = top_up[top_up["Bridge_Value"] > 0].sort_values("Bridge_Value", ascending=False).head(10)
+                with cu:
+                    ups = mover[mover["Bridge_Value"] > 0].sort_values("Bridge_Value", ascending=False).head(10)
+                    ups = ups.sort_values("Bridge_Value")
                     fig_u = go.Figure(go.Bar(
-                        x=upsell["Bridge_Value"], y=upsell[customer_col],
-                        orientation="h", marker_color="#34D399",
-                        text=[format_currency(v) for v in upsell["Bridge_Value"]],
-                        textposition="outside",
-                        textfont=dict(color="#8892A4", size=10),
+                        x=ups["Bridge_Value"], y=ups[customer_col],
+                        orientation="h", marker_color="#16A34A",
+                        text=[fmt_currency(v) for v in ups["Bridge_Value"]],
+                        textposition="outside", textfont=dict(color="#5A6478", size=10),
                     ))
-                    fig_u.update_layout(title="Top Upsell Movers",
-                                         yaxis=dict(autorange="reversed"),
-                                         **PLOTLY_LAYOUT)
+                    ly_u = base_layout("Top Upsell Movers", height=320)
+                    ly_u["xaxis"] = LIGHT_AXIS
+                    ly_u["yaxis"] = LIGHT_AXIS_REV
+                    fig_u.update_layout(**ly_u)
                     st.plotly_chart(fig_u, use_container_width=True)
 
-                with col_d:
-                    churn_df = top_up[top_up["Bridge_Value"] < 0].sort_values("Bridge_Value").head(10)
+                with cd:
+                    dwn = mover[mover["Bridge_Value"] < 0].sort_values("Bridge_Value").head(10)
+                    dwn = dwn.sort_values("Bridge_Value", ascending=False)
                     fig_d = go.Figure(go.Bar(
-                        x=churn_df["Bridge_Value"], y=churn_df[customer_col],
-                        orientation="h", marker_color="#F87171",
-                        text=[format_currency(v) for v in churn_df["Bridge_Value"]],
-                        textposition="outside",
-                        textfont=dict(color="#8892A4", size=10),
+                        x=dwn["Bridge_Value"], y=dwn[customer_col],
+                        orientation="h", marker_color="#DC2626",
+                        text=[fmt_currency(v) for v in dwn["Bridge_Value"]],
+                        textposition="outside", textfont=dict(color="#5A6478", size=10),
                     ))
-                    fig_d.update_layout(title="Top Churn / Contraction",
-                                         yaxis=dict(autorange="reversed"),
-                                         **PLOTLY_LAYOUT)
+                    ly_d = base_layout("Top Churn / Contraction", height=320)
+                    ly_d["xaxis"] = LIGHT_AXIS
+                    ly_d["yaxis"] = LIGHT_AXIS_REV
+                    fig_d.update_layout(**ly_d)
                     st.plotly_chart(fig_d, use_container_width=True)
 
-                # Region / Geography breakdown (if available)
-                region_col = m["region_col"]
                 if region_col and region_col != "None" and region_col in df_lb.columns:
-                    region_df = df_lb.groupby(region_col)[metric].sum().reset_index().sort_values(metric, ascending=False)
+                    reg = df_lb.groupby(region_col)[metric].sum().reset_index().sort_values(metric)
                     fig_reg = go.Figure(go.Bar(
-                        x=region_df[metric], y=region_df[region_col],
-                        orientation="h", marker_color="#8B5CF6",
-                        text=[format_currency(v) for v in region_df[metric]],
-                        textposition="outside",
-                        textfont=dict(color="#8892A4", size=10),
+                        x=reg[metric], y=reg[region_col],
+                        orientation="h", marker_color="#8E24AA",
+                        text=[fmt_currency(v) for v in reg[metric]],
+                        textposition="outside", textfont=dict(color="#5A6478", size=10),
                     ))
-                    fig_reg.update_layout(title="ARR by Geography",
-                                           yaxis=dict(autorange="reversed"),
-                                           **PLOTLY_LAYOUT)
+                    ly_reg = base_layout("ARR by Geography", height=320)
+                    ly_reg["xaxis"] = LIGHT_AXIS
+                    ly_reg["yaxis"] = LIGHT_AXIS_REV
+                    fig_reg.update_layout(**ly_reg)
                     st.plotly_chart(fig_reg, use_container_width=True)
 
-                st.dataframe(top_df[[customer_col, "Ending_ARR_Fmt", "ARR_Change_Fmt"]].rename(
-                    columns={"Ending_ARR_Fmt": "Ending ARR", "ARR_Change_Fmt": "ARR Change"}
-                ), use_container_width=True)
+                top_df["Ending ARR"] = top_df["Ending_ARR"].apply(fmt_currency)
+                top_df["ARR Change"] = top_df["ARR_Change"].apply(fmt_currency)
+                st.dataframe(top_df[[customer_col, "Ending ARR", "ARR Change"]],
+                             use_container_width=True)
 
+            # ── Retention Trends ──────────────────────────────────────
             with tab3:
-                # NRR/GRR by period
                 nrr_rows = []
                 for lb in lookbacks:
-                    df_t = master[master["Lookback"] == lb].copy()
+                    df_t = master[master["Lookback"] == lb]
                     if date_col not in df_t.columns:
                         continue
                     for period, grp in df_t.groupby(date_col):
                         beg = grp["Beginning_ARR"].sum()
-                        churn_v = grp.loc[grp["Bridge"].isin(["Churn", "Partial Churn"]), "Bridge_Value"].sum()
-                        down_v = grp.loc[grp["Bridge"] == "Downsell", "Bridge_Value"].sum()
-                        up_v = grp.loc[grp["Bridge"] == "Upsell", "Bridge_Value"].sum()
-                        cross_v = grp.loc[grp["Bridge"] == "Cross Sell", "Bridge_Value"].sum()
-                        if beg > 0:
-                            nrr = ((beg + up_v + cross_v + churn_v + down_v) / beg) * 100
-                            grr = ((beg + churn_v + down_v) / beg) * 100
-                            nrr_rows.append({"Period": period, "Lookback": f"{lb}M", "NRR": nrr, "GRR": grr})
+                        if beg <= 0:
+                            continue
+                        ch = grp.loc[grp["Bridge"].isin(["Churn","Partial Churn"]), "Bridge_Value"].sum()
+                        dw = grp.loc[grp["Bridge"] == "Downsell",  "Bridge_Value"].sum()
+                        up = grp.loc[grp["Bridge"] == "Upsell",    "Bridge_Value"].sum()
+                        cr = grp.loc[grp["Bridge"] == "Cross Sell","Bridge_Value"].sum()
+                        nrr_rows.append({
+                            "Period": period, "Lookback": f"{lb}M",
+                            "NRR": (beg + up + cr + ch + dw) / beg * 100,
+                            "GRR": (beg + ch + dw) / beg * 100,
+                        })
 
                 if nrr_rows:
                     nrr_df = pd.DataFrame(nrr_rows)
+
                     fig_nrr = px.line(nrr_df, x="Period", y="NRR", color="Lookback",
-                                      title="Net Revenue Retention % Over Time",
-                                      color_discrete_sequence=["#3B82F6", "#34D399", "#8B5CF6", "#FCD34D"])
-                    fig_nrr.add_hline(y=100, line_dash="dot", line_color="#6B7A99", annotation_text="100%")
-                    fig_nrr.update_layout(**PLOTLY_LAYOUT)
+                                      color_discrete_sequence=BRAND_COLORS)
+                    fig_nrr.add_hline(y=100, line_dash="dot", line_color="#8C95A6",
+                                      annotation_text="100%", annotation_font_color="#8C95A6")
+                    ly_nrr = base_layout("Net Revenue Retention % Over Time")
+                    ly_nrr["xaxis"] = LIGHT_AXIS
+                    ly_nrr["yaxis"] = LIGHT_AXIS
+                    fig_nrr.update_layout(**ly_nrr)
                     st.plotly_chart(fig_nrr, use_container_width=True)
 
                     fig_grr = px.line(nrr_df, x="Period", y="GRR", color="Lookback",
-                                      title="Gross Revenue Retention % Over Time",
-                                      color_discrete_sequence=["#F87171", "#FB923C", "#FCD34D", "#6B7A99"])
-                    fig_grr.update_layout(**PLOTLY_LAYOUT)
+                                      color_discrete_sequence=["#DC2626","#EA580C","#F4A900"])
+                    ly_grr = base_layout("Gross Revenue Retention % Over Time")
+                    ly_grr["xaxis"] = LIGHT_AXIS
+                    ly_grr["yaxis"] = LIGHT_AXIS
+                    fig_grr.update_layout(**ly_grr)
                     st.plotly_chart(fig_grr, use_container_width=True)
 
-                # Vintage cohort revenue
                 if "Vintage" in df_lb.columns:
-                    vintage_df = df_lb.groupby("Vintage")[metric].sum().reset_index()
-                    fig_v = px.bar(vintage_df, x="Vintage", y=metric,
-                                   title="ARR by Customer Vintage (Cohort Year)",
-                                   color_discrete_sequence=["#A78BFA"])
-                    fig_v.update_layout(**PLOTLY_LAYOUT)
+                    vin = df_lb.groupby("Vintage")[metric].sum().reset_index()
+                    fig_v = px.bar(vin, x="Vintage", y=metric,
+                                   color_discrete_sequence=[BRAND_BLUE])
+                    ly_v = base_layout("ARR by Customer Vintage (Cohort Year)")
+                    ly_v["xaxis"] = LIGHT_AXIS
+                    ly_v["yaxis"] = LIGHT_AXIS
+                    fig_v.update_layout(**ly_v)
                     st.plotly_chart(fig_v, use_container_width=True)
 
+            # ── Output ───────────────────────────────────────────────
             with tab4:
-                output_cols = [c for c in master.columns if not c.startswith(("_", "Prior_", "Cum", "Share", "Pct", "Past_", "Future_", "Expiry_", "DTE", "Lookback_Date"))]
-                output_df = master[output_cols].copy()
-                st.markdown(f'<div class="section-header">Master Analytics Table — {len(output_df):,} rows</div>', unsafe_allow_html=True)
-                st.dataframe(output_df, use_container_width=True, height=400)
-
-                csv_out = output_df.to_csv(index=False)
+                drop_pfx = ("Prior_","Cum","Share","Pct","Past_","Future_",
+                             "Expiry_","DTE","Lookback_Date","_k")
+                out_cols = [c for c in master.columns
+                            if not any(c.startswith(p) for p in drop_pfx)]
+                out_df = master[out_cols].copy()
+                st.markdown(
+                    f'<div class="section-hdr">{len(out_df):,} rows — master analytics table</div>',
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(out_df, use_container_width=True, height=420)
+                csv_out = out_df.to_csv(index=False)
                 if st.session_state.user_email == ADMIN_EMAIL:
-                    st.download_button("⬇  Download Full Analytics Output", csv_out, "customer_analytics_output.csv", use_container_width=True)
+                    st.download_button("⬇  Download Full Output", csv_out,
+                                       "customer_analytics_output.csv", use_container_width=True)
                 else:
-                    st.download_button("⬇  Download Full Analytics Output", csv_out, disabled=True, use_container_width=True)
+                    st.download_button("⬇  Download Full Output", csv_out,
+                                       disabled=True, use_container_width=True)
                     st.warning("🔒 Download is available only for subscribed users.")
 
         elif st.session_state.validated_df is None:
             st.markdown("""
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;text-align:center;">
-                <div style="font-size:48px;margin-bottom:16px;">📈</div>
-                <div style="font-size:20px;font-weight:600;color:#E8EAF0;margin-bottom:8px;">Upload your dataset to begin</div>
-                <div style="font-size:13px;color:#6B7A99;">Map your columns and click Validate Data to get started</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div style="display:flex;flex-direction:column;align-items:center;
+                        justify-content:center;padding:80px 40px;text-align:center;">
+              <div style="font-size:48px;margin-bottom:16px;">📈</div>
+              <div style="font-size:18px;font-weight:600;color:#1A1D23;margin-bottom:8px;">
+                Upload your dataset to begin</div>
+              <div style="font-size:13px;color:#8C95A6;">Map columns and click Validate Data</div>
+            </div>""", unsafe_allow_html=True)
         else:
             st.markdown("""
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 40px;text-align:center;">
-                <div style="font-size:40px;margin-bottom:16px;">⚡</div>
-                <div style="font-size:18px;font-weight:600;color:#E8EAF0;margin-bottom:8px;">Configure & Run Analytics</div>
-                <div style="font-size:13px;color:#6B7A99;">Select lookback windows and click Run Customer Analytics</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div style="display:flex;flex-direction:column;align-items:center;
+                        justify-content:center;padding:60px 40px;text-align:center;">
+              <div style="font-size:40px;margin-bottom:16px;">⚡</div>
+              <div style="font-size:18px;font-weight:600;color:#1A1D23;margin-bottom:8px;">
+                Ready to run</div>
+              <div style="font-size:13px;color:#8C95A6;">
+                Select lookback windows and click Run Customer Analytics</div>
+            </div>""", unsafe_allow_html=True)
