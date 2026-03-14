@@ -100,260 +100,304 @@ def load_file(uf):
 # ─────────────────────────────────────────────────────────────────────────────
 if not st.session_state.authenticated:
 
+    # ── Read query params set by the HTML form submit ──────────────────
+    qp = st.query_params
+    if "email" in qp and "pwd" in qp:
+        em  = qp["email"].strip()
+        pw  = qp["pwd"].strip()
+        name_ok  = (em.lower() == ADMIN_NAME  and pw == ADMIN_PASSWORD)
+        email_ok = (em.lower() == ADMIN_EMAIL.lower() and pw == ADMIN_PASSWORD)
+        free_ok  = ("@" in em and len(pw) >= 1)
+        guest_ok = (em == "__guest__")
+        if name_ok or email_ok:
+            st.session_state.authenticated = True
+            st.session_state.user_email    = ADMIN_EMAIL
+            st.query_params.clear()
+            st.rerun()
+        elif guest_ok or free_ok:
+            st.session_state.authenticated = True
+            st.session_state.user_email    = "guest@demo.com" if guest_ok else em
+            st.query_params.clear()
+            st.rerun()
+
+    # ── Full-page landing in one HTML block with embedded JS form ────────
+    # We use a real HTML form that submits as GET (so params go into URL/query string)
+    # Streamlit will rerun and pick them up via st.query_params above.
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    html, body, [class*="css"] { font-family:'Inter',sans-serif; margin:0; padding:0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, [class*="css"] { font-family:'Inter',sans-serif; }
     #MainMenu{visibility:hidden;} footer{visibility:hidden;} header{visibility:hidden;}
-    .stApp { background:#0047AB !important; }
+    .stApp { background: #0047AB !important; }
     [data-testid="stSidebar"] { display:none !important; }
-
-    /* Zero out ALL Streamlit padding */
-    .block-container { padding:0 !important; max-width:100% !important; margin:0 !important; }
+    .block-container { padding:0 !important; max-width:100% !important; }
     section[data-testid="stMain"] { padding:0 !important; }
     section[data-testid="stMain"] > div { padding:0 !important; }
     div[data-testid="stVerticalBlockBorderWrapper"] { padding:0 !important; }
+    .element-container { margin:0 !important; padding:0 !important; }
 
-    /* Inputs */
-    .stTextInput input {
-        background:#F8F9FC !important; border:1.5px solid #E2E6EF !important;
-        border-radius:8px !important; color:#1A1D23 !important;
-        font-size:14px !important; padding:10px 14px !important;
+    /* ── Landing page layout ── */
+    .landing-wrap {
+        display: flex;
+        min-height: 100vh;
+        width: 100%;
+        font-family: 'Inter', sans-serif;
     }
-    .stTextInput input:focus { border-color:#0047AB !important; }
-    .stTextInput label { color:#5A6478 !important; font-size:12px !important; font-weight:600 !important; }
+    .panel-left {
+        flex: 0 0 57%;
+        background: linear-gradient(150deg,#001F5B 0%,#0047AB 55%,#1565C0 100%);
+        padding: 48px 48px 40px 48px;
+        display: flex;
+        flex-direction: column;
+    }
+    .panel-right {
+        flex: 0 0 43%;
+        background: #FFFFFF;
+        padding: 48px 48px 40px 48px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+    }
+    .logo-row { display:flex;align-items:center;gap:10px;margin-bottom:44px; }
+    .logo-icon {
+        width:34px;height:34px;background:rgba(255,255,255,0.15);border-radius:7px;
+        display:flex;align-items:center;justify-content:center;color:white;
+        font-size:16px;font-weight:800;border:1px solid rgba(255,255,255,0.25);
+        flex-shrink:0;
+    }
+    .logo-text { color:white;font-size:15px;font-weight:700; }
+    .badge {
+        display:inline-block;background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.85);
+        font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+        padding:5px 12px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);
+        margin-bottom:16px;
+    }
+    .hero-h1 {
+        color:#FFFFFF;font-size:40px;font-weight:800;line-height:1.1;
+        letter-spacing:-0.03em;margin-bottom:14px;
+    }
+    .hero-p { color:rgba(255,255,255,0.75);font-size:14px;line-height:1.65;max-width:430px;margin-bottom:24px; }
+    .card-blue {
+        background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+        border-radius:12px;padding:16px 18px;margin-bottom:16px;
+    }
+    .card-label {
+        color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
+        letter-spacing:0.09em;text-transform:uppercase;margin-bottom:10px;
+    }
+    .feature-grid { display:grid;grid-template-columns:1fr 1fr;gap:6px; }
+    .feature-item { color:rgba(255,255,255,0.85);font-size:12px; }
+    .consult-row { display:flex;align-items:flex-start;gap:12px; }
+    .consult-icon { font-size:24px;margin-top:2px;flex-shrink:0; }
+    .consult-title { color:#FFFFFF;font-size:13px;font-weight:700;margin-bottom:4px; }
+    .consult-text { color:rgba(255,255,255,0.65);font-size:12px;line-height:1.55; }
+    .consult-text strong { color:rgba(255,255,255,0.85); }
+    .rate-pills { display:flex;gap:8px;margin-top:8px;flex-wrap:wrap; }
+    .rate-pill {
+        background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
+        font-size:11px;font-weight:600;padding:4px 10px;
+        border-radius:6px;border:1px solid rgba(255,255,255,0.2);
+    }
+    .pricing-label {
+        color:rgba(255,255,255,0.45);font-size:10px;font-weight:700;
+        letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;
+    }
+    .pricing-grid { display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px; }
+    .price-card {
+        background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);
+        border-radius:10px;padding:14px;
+    }
+    .price-card-featured {
+        background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.3);
+        border-radius:10px;padding:14px;position:relative;
+    }
+    .popular-badge {
+        position:absolute;top:-9px;left:12px;background:#F59E0B;
+        color:#1A1D23;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;
+    }
+    .price-tier { color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px; }
+    .price-num  { color:#FFFFFF;font-size:20px;font-weight:800; }
+    .price-per  { color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:7px; }
+    .price-feat { color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7; }
 
-    /* Buttons */
-    .stButton > button {
-        background:#0047AB !important; color:#FFFFFF !important; border:none !important;
-        border-radius:8px !important; font-weight:600 !important; font-size:14px !important;
-        padding:11px 24px !important; width:100% !important; transition:background 0.15s !important;
+    /* ── Right panel / form ── */
+    .welcome-title { font-size:24px;font-weight:800;color:#1A1D23;letter-spacing:-0.02em;margin-bottom:6px; }
+    .welcome-sub   { font-size:13px;color:#8C95A6;line-height:1.55;margin-bottom:28px; }
+    .form-label { font-size:12px;font-weight:600;color:#5A6478;letter-spacing:0.02em;margin-bottom:5px; }
+    .form-input {
+        width:100%;padding:11px 14px;font-size:14px;border:1.5px solid #E2E6EF;
+        border-radius:8px;color:#1A1D23;background:#F8F9FC;
+        font-family:'Inter',sans-serif;outline:none;margin-bottom:14px;
+        transition:border-color 0.15s;
     }
-    .stButton > button:hover { background:#003899 !important; }
+    .form-input:focus { border-color:#0047AB; box-shadow:0 0 0 3px rgba(0,71,171,0.08); }
+    .btn-primary {
+        width:100%;padding:12px 24px;background:#0047AB;color:#FFFFFF;
+        border:none;border-radius:8px;font-size:14px;font-weight:600;
+        font-family:'Inter',sans-serif;cursor:pointer;transition:background 0.15s;
+        margin-bottom:14px;
+    }
+    .btn-primary:hover { background:#003899; }
+    .btn-secondary {
+        width:100%;padding:11px 24px;background:#F8F9FC;color:#0047AB;
+        border:1.5px solid #BFDBFE;border-radius:8px;font-size:14px;font-weight:600;
+        font-family:'Inter',sans-serif;cursor:pointer;transition:background 0.15s;
+        margin-bottom:20px;
+    }
+    .btn-secondary:hover { background:#EFF6FF; }
+    .divider-row { display:flex;align-items:center;gap:12px;margin:4px 0 14px 0; }
+    .divider-line { flex:1;height:1px;background:#E5E8EF; }
+    .divider-or { font-size:11px;color:#8C95A6; }
+    .info-card {
+        padding:16px;background:#F8F9FC;border-radius:10px;
+        border:1px solid #E5E8EF;margin-bottom:12px;
+    }
+    .info-card-title { font-size:12px;font-weight:700;color:#1A1D23;margin-bottom:7px; }
+    .info-card-text  { font-size:12px;color:#5A6478;line-height:1.6; }
+    .consult-card {
+        padding:14px;background:#EFF6FF;border-radius:10px;
+        border:1px solid #BFDBFE;margin-bottom:14px;
+    }
+    .consult-card-title { font-size:12px;font-weight:700;color:#1E40AF;margin-bottom:5px; }
+    .consult-card-text  { font-size:12px;color:#3B5998;line-height:1.55; }
+    .terms-text { font-size:11px;color:#8C95A6;margin-top:8px; }
+    .err-box {
+        background:#FEF2F2;border:1px solid #FCA5A5;color:#DC2626;
+        border-radius:6px;padding:10px 14px;font-size:12px;margin-bottom:12px;
+    }
     </style>
-    """, unsafe_allow_html=True)
 
-    # ── Single full-width HTML block: blue left + white right ──────────────
-    st.markdown("""
-    <div style="display:flex;min-height:100vh;width:100%;font-family:'Inter',sans-serif;">
+    <div class="landing-wrap">
 
-      <!-- ── LEFT: Blue hero panel ── -->
-      <div style="flex:0 0 57%;background:linear-gradient(150deg,#001F5B 0%,#0047AB 55%,#1565C0 100%);
-                  padding:48px 48px 40px 48px;display:flex;flex-direction:column;box-sizing:border-box;">
+      <!-- ═══ LEFT PANEL ═══ -->
+      <div class="panel-left">
 
-        <!-- Logo -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:44px;">
-          <div style="width:34px;height:34px;background:rgba(255,255,255,0.15);border-radius:7px;
-                      display:flex;align-items:center;justify-content:center;color:white;
-                      font-size:16px;font-weight:800;border:1px solid rgba(255,255,255,0.25);">R</div>
-          <span style="color:white;font-size:15px;font-weight:700;">Revenue Analytics Engine</span>
+        <div class="logo-row">
+          <div class="logo-icon">R</div>
+          <span class="logo-text">Revenue Analytics Engine</span>
         </div>
 
-        <!-- Badge -->
-        <div style="display:inline-block;background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.85);
-                    font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
-                    padding:5px 12px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);
-                    margin-bottom:16px;width:fit-content;">Revenue Intelligence Platform</div>
+        <div class="badge">Revenue Intelligence Platform</div>
 
-        <!-- Headline -->
-        <h1 style="color:#FFFFFF;font-size:40px;font-weight:800;line-height:1.1;
-                   letter-spacing:-0.03em;margin:0 0 14px 0;">
-          Turn revenue data<br>into strategic insight
-        </h1>
-        <p style="color:rgba(255,255,255,0.75);font-size:14px;line-height:1.65;
-                  max-width:430px;margin:0 0 24px 0;">
+        <h1 class="hero-h1">Turn revenue data<br>into strategic insight</h1>
+        <p class="hero-p">
           Stop spending weeks in Excel. Upload your billing or revenue data and instantly
           get cohort analysis, ARR bridge breakdowns, retention metrics, and customer
           segmentation — all in one place.
         </p>
 
-        <!-- What you get -->
-        <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
-                    border-radius:12px;padding:16px 18px;margin-bottom:16px;">
-          <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                      letter-spacing:0.09em;text-transform:uppercase;margin-bottom:10px;">
-            What you get instantly
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div style="color:rgba(255,255,255,0.85);font-size:12px;">📊 Cohort segmentation (SG/PC/RC)</div>
-            <div style="color:rgba(255,255,255,0.85);font-size:12px;">📈 ARR / MRR revenue bridge</div>
-            <div style="color:rgba(255,255,255,0.85);font-size:12px;">🔄 NRR, GRR, logo retention</div>
-            <div style="color:rgba(255,255,255,0.85);font-size:12px;">💰 Price vs volume decomposition</div>
-            <div style="color:rgba(255,255,255,0.85);font-size:12px;">🎯 New logo / churn / upsell flags</div>
-            <div style="color:rgba(255,255,255,0.85);font-size:12px;">📋 PE-grade waterfall table</div>
+        <div class="card-blue">
+          <div class="card-label">What you get instantly</div>
+          <div class="feature-grid">
+            <div class="feature-item">📊 Cohort segmentation (SG/PC/RC)</div>
+            <div class="feature-item">📈 ARR / MRR revenue bridge</div>
+            <div class="feature-item">🔄 NRR, GRR, logo retention</div>
+            <div class="feature-item">💰 Price vs volume decomposition</div>
+            <div class="feature-item">🎯 New logo / churn / upsell flags</div>
+            <div class="feature-item">📋 PE-grade waterfall table</div>
           </div>
         </div>
 
-        <!-- Consulting -->
-        <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
-                    border-radius:12px;padding:16px 18px;margin-bottom:16px;">
-          <div style="display:flex;align-items:flex-start;gap:12px;">
-            <div style="font-size:24px;margin-top:2px;">👨‍💼</div>
+        <div class="card-blue">
+          <div class="consult-row">
+            <div class="consult-icon">👨‍💼</div>
             <div>
-              <div style="color:#FFFFFF;font-size:13px;font-weight:700;margin-bottom:4px;">
-                Expert help — no full-time hire
-              </div>
-              <div style="color:rgba(255,255,255,0.65);font-size:12px;line-height:1.55;">
+              <div class="consult-title">Expert help — no full-time hire</div>
+              <div class="consult-text">
                 Need someone to interpret your data, build a revenue narrative for investors,
-                or set up your analytics model? Book <strong style="color:rgba(255,255,255,0.85);">Ashwani</strong>
-                for a focused 1–2 hour session. Former PE analytics background with deep SaaS
-                and subscription metrics expertise.
+                or set up your analytics model? Book <strong>Ashwani</strong> for a focused
+                1–2 hour session. Former PE analytics background with deep SaaS and
+                subscription metrics expertise.
               </div>
-              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-                <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
-                             font-size:11px;font-weight:600;padding:4px 10px;
-                             border-radius:6px;border:1px solid rgba(255,255,255,0.2);">1 hr · $150</span>
-                <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
-                             font-size:11px;font-weight:600;padding:4px 10px;
-                             border-radius:6px;border:1px solid rgba(255,255,255,0.2);">2 hrs · $280</span>
-                <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
-                             font-size:11px;font-weight:600;padding:4px 10px;
-                             border-radius:6px;border:1px solid rgba(255,255,255,0.2);">Half day · $500</span>
+              <div class="rate-pills">
+                <span class="rate-pill">1 hr · $150</span>
+                <span class="rate-pill">2 hrs · $280</span>
+                <span class="rate-pill">Half day · $500</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Pricing -->
         <div>
-          <div style="color:rgba(255,255,255,0.45);font-size:10px;font-weight:700;
-                      letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">
-            Simple pricing
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);
-                        border-radius:10px;padding:14px;">
-              <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                           text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;">Free</div>
-              <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$0</div>
-              <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:7px;">forever</div>
-              <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7;">
-                ✓ Upload &amp; analyse<br>✓ View all dashboards<br>✗ Download results
-              </div>
+          <div class="pricing-label">Simple pricing</div>
+          <div class="pricing-grid">
+            <div class="price-card">
+              <div class="price-tier">Free</div>
+              <div class="price-num">$0</div>
+              <div class="price-per">forever</div>
+              <div class="price-feat">✓ Upload &amp; analyse<br>✓ View all dashboards<br>✗ Download results</div>
             </div>
-            <div style="background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.3);
-                        border-radius:10px;padding:14px;position:relative;">
-              <div style="position:absolute;top:-9px;left:12px;background:#F59E0B;
-                          color:#1A1D23;font-size:9px;font-weight:700;
-                          padding:2px 8px;border-radius:10px;">POPULAR</div>
-              <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                           text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;">Premium</div>
-              <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$25</div>
-              <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:7px;">once / year</div>
-              <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7;">
-                ✓ Everything free<br>✓ Download results<br>✓ Export reports
-              </div>
+            <div class="price-card-featured">
+              <div class="popular-badge">POPULAR</div>
+              <div class="price-tier">Premium</div>
+              <div class="price-num">$25</div>
+              <div class="price-per">once / year</div>
+              <div class="price-feat">✓ Everything free<br>✓ Download results<br>✓ Export reports</div>
             </div>
-            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);
-                        border-radius:10px;padding:14px;">
-              <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                           text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;">Usage</div>
-              <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$10</div>
-              <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:7px;">per run</div>
-              <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7;">
-                ✓ Each analysis run<br>✓ All engine types<br>✓ Pay as you go
-              </div>
+            <div class="price-card">
+              <div class="price-tier">Usage</div>
+              <div class="price-num">$10</div>
+              <div class="price-per">per run</div>
+              <div class="price-feat">✓ Each analysis run<br>✓ All engine types<br>✓ Pay as you go</div>
             </div>
           </div>
         </div>
 
       </div>
 
-      <!-- ── RIGHT: White login panel ── -->
-      <div style="flex:0 0 43%;background:#FFFFFF;padding:48px 48px 40px 48px;
-                  display:flex;flex-direction:column;box-sizing:border-box;">
+      <!-- ═══ RIGHT PANEL ═══ -->
+      <div class="panel-right">
 
-        <div style="margin-bottom:28px;">
-          <div style="font-size:24px;font-weight:800;color:#1A1D23;
-                      letter-spacing:-0.02em;margin-bottom:6px;">Welcome back</div>
-          <div style="font-size:13px;color:#8C95A6;line-height:1.55;">
-            Sign in to access the platform, or use the guest demo to explore without an account.
+        <div class="welcome-title">Welcome back</div>
+        <div class="welcome-sub">Sign in to access the platform, or use the guest demo to explore without an account.</div>
+
+        <form method="GET" action="">
+          <div class="form-label">Email address</div>
+          <input class="form-input" type="text"  name="email" placeholder="you@company.com" autocomplete="email" />
+          <div class="form-label">Password</div>
+          <input class="form-input" type="password" name="pwd" placeholder="••••••••" autocomplete="current-password" />
+          <button class="btn-primary" type="submit">Sign in →</button>
+        </form>
+
+        <div class="divider-row">
+          <div class="divider-line"></div>
+          <span class="divider-or">or</span>
+          <div class="divider-line"></div>
+        </div>
+
+        <form method="GET" action="">
+          <input type="hidden" name="email" value="__guest__" />
+          <input type="hidden" name="pwd"   value="guest" />
+          <button class="btn-secondary" type="submit">Try free demo (no signup needed)</button>
+        </form>
+
+        <div class="info-card">
+          <div class="info-card-title">🔒 How access works</div>
+          <div class="info-card-text">
+            <strong>Free users</strong> — sign in with any email, explore all dashboards and charts. Download is locked until you subscribe.<br><br>
+            <strong>Premium ($25/yr)</strong> — unlocks CSV/Excel download and report export.<br><br>
+            <strong>$10 per run</strong> — after your first subscription, each analytics run is billed at $10. Pay only for what you use.
           </div>
         </div>
 
+        <div class="consult-card">
+          <div class="consult-card-title">📞 Book a consulting session</div>
+          <div class="consult-card-text">
+            Ashwani is available for 1-on-1 analytics sessions — interpret your data,
+            build investor narratives, or get your cohort model set up correctly.
+            <br><strong>No retainer. Book by the hour.</strong>
+          </div>
+        </div>
+
+        <div class="terms-text">By continuing you agree to our Terms of Service and Privacy Policy.</div>
+
       </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Streamlit form elements overlaid inside the right panel ───────────
-    # We use a container that overlaps the right side visually
-    # by using negative margin trick + fixed position of form elements
-    # The cleanest way: render form BELOW the HTML block,
-    # but CSS the whole page so the form appears in the right spot.
-    st.markdown("""
-    <style>
-    /* Pull the form elements up into the right panel area */
-    .login-form-area {
-        position: relative;
-        background: #FFFFFF;
-        margin-top: -220px;   /* pull up into the white panel */
-        margin-left: 57%;
-        padding: 0 48px 40px 48px;
-        box-sizing: border-box;
-        min-height: 220px;
-        z-index: 10;
-    }
-    </style>
-    <div class="login-form-area">
-    """, unsafe_allow_html=True)
-
-    login_email    = st.text_input("Email address", placeholder="you@company.com", key="li_email")
-    login_password = st.text_input("Password", type="password", placeholder="••••••••", key="li_pass")
-
-    if st.button("Sign in →", key="btn_signin"):
-        name_ok  = (login_email.strip().lower() == ADMIN_NAME and login_password.strip() == ADMIN_PASSWORD)
-        email_ok = (login_email.strip().lower() == ADMIN_EMAIL.lower() and login_password.strip() == ADMIN_PASSWORD)
-        free_ok  = ("@" in login_email and len(login_password) >= 1)
-        if name_ok or email_ok:
-            st.session_state.authenticated = True
-            st.session_state.user_email    = ADMIN_EMAIL
-            st.rerun()
-        elif free_ok:
-            st.session_state.authenticated = True
-            st.session_state.user_email    = login_email.strip()
-            st.rerun()
-        else:
-            st.error("Please enter a valid email address and password.")
-
-    st.markdown("""
-    <div style="display:flex;align-items:center;gap:12px;margin:14px 0;">
-      <div style="flex:1;height:1px;background:#E5E8EF;"></div>
-      <span style="font-size:11px;color:#8C95A6;">or</span>
-      <div style="flex:1;height:1px;background:#E5E8EF;"></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("Try free demo (no signup needed)", key="btn_guest"):
-        st.session_state.authenticated = True
-        st.session_state.user_email    = "guest@demo.com"
-        st.rerun()
-
-    st.markdown("""
-    <div style="margin-top:20px;padding:16px;background:#F8F9FC;border-radius:10px;border:1px solid #E5E8EF;">
-      <div style="font-size:12px;font-weight:700;color:#1A1D23;margin-bottom:7px;">🔒 How access works</div>
-      <div style="font-size:12px;color:#5A6478;line-height:1.6;">
-        <strong>Free users</strong> — sign in with any email, explore all dashboards and charts.
-        Download is locked until you subscribe.<br><br>
-        <strong>Premium ($25/yr)</strong> — unlocks CSV/Excel download and report export.<br><br>
-        <strong>$10 per run</strong> — after your first subscription, each analytics run is billed at $10.
-        Pay only for what you use.
-      </div>
-    </div>
-    <div style="margin-top:14px;padding:14px;background:#EFF6FF;border-radius:10px;border:1px solid #BFDBFE;">
-      <div style="font-size:12px;font-weight:700;color:#1E40AF;margin-bottom:5px;">📞 Book a consulting session</div>
-      <div style="font-size:12px;color:#3B5998;line-height:1.55;">
-        Ashwani is available for 1-on-1 analytics sessions — interpret your data,
-        build investor narratives, or get your cohort model set up correctly.
-        <br><strong>No retainer. Book by the hour.</strong>
-      </div>
-    </div>
-    <div style="margin-top:16px;font-size:11px;color:#8C95A6;">
-      By continuing you agree to our Terms of Service and Privacy Policy.
-    </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.stop()
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
