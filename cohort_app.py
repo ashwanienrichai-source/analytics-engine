@@ -7,17 +7,16 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Analytics Engine", layout="wide")
 
 # ---------------------------------------------------------
-# ADMIN EMAIL (ALLOWED TO DOWNLOAD)
+# ADMIN EMAIL
 # ---------------------------------------------------------
 
 ADMIN_EMAIL = "ashwanivatsalarya@gmail.com"
 
 # ---------------------------------------------------------
-# USER EMAIL INPUT
+# USER LOGIN
 # ---------------------------------------------------------
 
 st.sidebar.title("User")
-
 user_email = st.sidebar.text_input("Enter your email")
 
 if "user_email" not in st.session_state:
@@ -28,8 +27,11 @@ if user_email:
 
 
 # ---------------------------------------------------------
-# SESSION
+# SESSION VARIABLES
 # ---------------------------------------------------------
+
+if "validated_df" not in st.session_state:
+    st.session_state.validated_df = None
 
 if "result" not in st.session_state:
     st.session_state.result = None
@@ -51,27 +53,6 @@ module = st.sidebar.radio(
         "Revenue Concentration"
     ]
 )
-
-# ---------------------------------------------------------
-# COMING SOON MODULES
-# ---------------------------------------------------------
-
-if module in ["Product Bundling","ACV Analysis","Revenue Concentration"]:
-
-    st.title(module)
-
-    st.markdown(
-        """
-        <h1 style='text-align:center;color:#7C3AED;
-        font-size:80px;margin-top:200px;'>
-        Coming Soon 🚀
-        </h1>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.stop()
-
 
 # ---------------------------------------------------------
 # FILE LOADER
@@ -160,244 +141,56 @@ def cohort_engine(df, metric, cols, cohort_type):
     return temp
 
 
-# =========================================================
-# COHORT ANALYTICS MODULE (UNCHANGED)
-# =========================================================
+# ---------------------------------------------------------
+# CUSTOMER ANALYTICS ENGINE
+# ---------------------------------------------------------
 
-if module == "Cohort Analytics":
+def customer_engine(df, customer_col, date_col, metric):
 
-    st.title("Cohort Analytics Engine")
+    df = df.sort_values([customer_col, date_col])
 
-    left, right = st.columns([1,1.7])
+    df["Prior_ARR"] = df.groupby(customer_col)[metric].shift(1).fillna(0)
 
-    with left:
+    df["Bridge_Value"] = df[metric] - df["Prior_ARR"]
 
-        st.subheader("Upload & Configure")
+    conditions = [
 
-        uploaded_file = st.file_uploader(
-            "Upload CSV or Excel",
-            type=["csv","xlsx"]
-        )
+        (df["Prior_ARR"] == 0) & (df[metric] > 0),
 
-        if uploaded_file:
+        (df["Prior_ARR"] > 0) & (df[metric] == 0),
 
-            df = load_file(uploaded_file)
+        (df[metric] > df["Prior_ARR"]),
 
-            columns = df.columns.tolist()
+        (df[metric] < df["Prior_ARR"]),
 
-            st.success("File Loaded")
+    ]
 
-            st.markdown("### Field Mapping")
+    choices = ["New","Churn","Upsell","Downsell"]
 
-            metric = st.selectbox("Metric Column", columns)
+    df["Bridge"] = np.select(conditions,choices,"No Change")
 
-            customer_col = st.selectbox("Customer Column", ["None"] + columns)
+    return df
 
-            date_col = st.selectbox("Date Column", ["None"] + columns)
 
-            geo_col = st.selectbox("Geography Column", ["None"] + columns)
+# ---------------------------------------------------------
+# MAIN PAGE
+# ---------------------------------------------------------
 
-            product_col = st.selectbox("Product Column", ["None"] + columns)
+st.title("Revenue Analytics Engine")
 
-            fiscal_col = st.selectbox("Fiscal Year Column", ["None"] + columns)
+left, right = st.columns([1,1.7])
 
-            if fiscal_col != "None":
+# ---------------------------------------------------------
+# LEFT PANEL (UPLOAD + MAPPING)
+# ---------------------------------------------------------
 
-                fy_vals = sorted(df[fiscal_col].dropna().unique())
+with left:
 
-                logic = st.selectbox(
-                    "Period Logic",
-                    ["All Periods","Latest Period","Select Fiscal Year"]
-                )
-
-                if logic == "Latest Period":
-
-                    latest = fy_vals[-1]
-                    df = df[df[fiscal_col] == latest]
-
-                if logic == "Select Fiscal Year":
-
-                    fy = st.selectbox("Fiscal Year", fy_vals)
-                    df = df[df[fiscal_col] == fy]
-
-
-            st.markdown("### Individual Cohorts")
-
-            individual_cols = st.multiselect(
-                "Select Columns",
-                columns
-            )
-
-            st.markdown("### Hierarchical Cohorts")
-
-            hierarchy_count = st.number_input(
-                "Number of Hierarchies",
-                0,10,0
-            )
-
-            hierarchies = []
-
-            for i in range(hierarchy_count):
-
-                cols = st.multiselect(
-                    f"Hierarchy {i+1}",
-                    columns,
-                    key=i
-                )
-
-                if cols:
-                    hierarchies.append(cols)
-
-            st.markdown("### Cohort Types")
-
-            sg = st.checkbox("Size Group (SG_)")
-            pc = st.checkbox("Percentile (PC_)")
-            rc = st.checkbox("Revenue Contribution (RC_)")
-
-            if st.button("Generate Cohorts"):
-
-                result = df.copy()
-
-                for col in individual_cols:
-
-                    if sg:
-
-                        sg_temp = cohort_engine(df, metric, [col], "SG")
-
-                        result = result.merge(
-                            sg_temp[[col,f"SG_{col}"]],
-                            on=col,
-                            how="left"
-                        )
-
-                    if pc:
-
-                        pc_temp = cohort_engine(df, metric, [col], "PC")
-
-                        result = result.merge(
-                            pc_temp[[col,f"PC_{col}"]],
-                            on=col,
-                            how="left"
-                        )
-
-                    if rc:
-
-                        rc_temp = cohort_engine(df, metric, [col], "RC")
-
-                        result = result.merge(
-                            rc_temp[[col,f"RC_{col}"]],
-                            on=col,
-                            how="left"
-                        )
-
-                for group in hierarchies:
-
-                    name = "_".join(group)
-
-                    if sg:
-
-                        sg_temp = cohort_engine(df, metric, group, "SG")
-
-                        result = result.merge(
-                            sg_temp[group+[f"SG_{name}"]],
-                            on=group,
-                            how="left"
-                        )
-
-                    if pc:
-
-                        pc_temp = cohort_engine(df, metric, group, "PC")
-
-                        result = result.merge(
-                            pc_temp[group+[f"PC_{name}"]],
-                            on=group,
-                            how="left"
-                        )
-
-                    if rc:
-
-                        rc_temp = cohort_engine(df, metric, group, "RC")
-
-                        result = result.merge(
-                            rc_temp[group+[f"RC_{name}"]],
-                            on=group,
-                            how="left"
-                        )
-
-                st.session_state.result = result
-                st.session_state.df = df
-                st.session_state.metric = metric
-                st.session_state.customer_col = customer_col
-                st.session_state.fiscal_col = fiscal_col
-
-
-    with right:
-
-        if st.session_state.result is not None:
-
-            df = st.session_state.df
-            metric = st.session_state.metric
-            result = st.session_state.result
-            fiscal_col = st.session_state.fiscal_col
-
-            tabs = st.tabs(["Summary","Output"])
-
-            with tabs[0]:
-
-                if fiscal_col != "None":
-
-                    summary = (
-                        df.groupby(fiscal_col)
-                        .agg(
-                            Revenue=(metric,"sum"),
-                            Customers=(st.session_state.customer_col,"nunique")
-                        )
-                        .reset_index()
-                    )
-
-                    summary["Revenue per Customer"] = summary["Revenue"] / summary["Customers"]
-
-                    st.dataframe(summary)
-
-            with tabs[1]:
-
-                st.dataframe(result)
-
-                csv = result.to_csv(index=False)
-
-                if st.session_state.user_email == ADMIN_EMAIL:
-
-                    st.download_button(
-                        "Download Output",
-                        csv,
-                        "cohort_output.csv"
-                    )
-
-                else:
-
-                    st.download_button(
-                        "Download Output",
-                        csv,
-                        disabled=True
-                    )
-
-                    st.warning(
-                        "🔒 Download is available only for subscribed users."
-                    )
-
-
-# =========================================================
-# CUSTOMER ANALYTICS MODULE
-# =========================================================
-
-if module == "Customer Analytics":
-
-    st.title("Customer Analytics Engine")
+    st.subheader("Upload & Map Data")
 
     uploaded_file = st.file_uploader(
-        "Upload Dataset",
-        type=["csv","xlsx"],
-        key="customer_upload"
+        "Upload CSV or Excel",
+        type=["csv","xlsx"]
     )
 
     if uploaded_file:
@@ -406,58 +199,167 @@ if module == "Customer Analytics":
 
         columns = df.columns.tolist()
 
-        metric = st.selectbox("ARR / MRR Column", columns)
-
-        customer_col = st.selectbox("Customer Column", columns)
-
-        date_col = st.selectbox("Date Column", columns)
-
-        quantity_col = st.selectbox("Quantity Column", ["None"] + columns)
-
-        df[date_col] = pd.to_datetime(df[date_col])
-
-        df = df.sort_values([customer_col,date_col])
-
-        df["Prior_ARR"] = df.groupby(customer_col)[metric].shift(1).fillna(0)
-
-        df["Bridge_Value"] = df[metric] - df["Prior_ARR"]
-
-        conditions = [
-
-            (df["Prior_ARR"] == 0) & (df[metric] > 0),
-
-            (df["Prior_ARR"] > 0) & (df[metric] == 0),
-
-            (df[metric] > df["Prior_ARR"]),
-
-            (df[metric] < df["Prior_ARR"])
-
-        ]
-
-        choices = ["New","Churn","Upsell","Downsell"]
-
-        df["Bridge"] = np.select(conditions,choices,"No Change")
-
-        st.subheader("Revenue Bridge")
-
-        bridge = df.groupby("Bridge")["Bridge_Value"].sum().reset_index()
-
-        fig = px.bar(bridge,x="Bridge",y="Bridge_Value")
-
-        st.plotly_chart(fig,use_container_width=True)
-
-        st.subheader("Top Customers")
-
-        top = (
-            df.groupby(customer_col)[metric]
-            .sum()
-            .reset_index()
-            .sort_values(metric,ascending=False)
-            .head(10)
+        dataset_type = st.radio(
+            "Dataset Type",
+            ["Bookings Data","Revenue Data","Billings Data"]
         )
 
-        fig2 = px.bar(top,x=customer_col,y=metric)
+        st.markdown("### Map Columns")
 
-        st.plotly_chart(fig2,use_container_width=True)
+        customer_col = st.selectbox("Customer Column", columns)
+        date_col = st.selectbox("Date Column", columns)
+        metric = st.selectbox("Revenue Column", columns)
 
-        st.dataframe(df)
+        product_col = st.selectbox("Product Column", ["None"] + columns)
+        region_col = st.selectbox("Region Column", ["None"] + columns)
+
+        if st.button("Validate Data"):
+
+            df[date_col] = pd.to_datetime(df[date_col])
+
+            st.session_state.validated_df = df
+            st.session_state.customer_col = customer_col
+            st.session_state.date_col = date_col
+            st.session_state.metric = metric
+
+            st.success("Data validated successfully")
+
+
+# ---------------------------------------------------------
+# RIGHT PANEL (ANALYTICS)
+# ---------------------------------------------------------
+
+with right:
+
+    if st.session_state.validated_df is not None:
+
+        df = st.session_state.validated_df
+        customer_col = st.session_state.customer_col
+        date_col = st.session_state.date_col
+        metric = st.session_state.metric
+
+        # ---------------------------------------------------------
+        # COHORT ANALYTICS
+        # ---------------------------------------------------------
+
+        if module == "Cohort Analytics":
+
+            st.subheader("Cohort Analytics")
+
+            columns = df.columns.tolist()
+
+            cohort_cols = st.multiselect(
+                "Select Cohort Columns",
+                columns
+            )
+
+            cohort_type = st.selectbox(
+                "Cohort Type",
+                ["SG","PC","RC"]
+            )
+
+            if st.button("Analyze Metrics"):
+
+                result = cohort_engine(df, metric, cohort_cols, cohort_type)
+
+                st.session_state.result = result
+
+                st.dataframe(result)
+
+        # ---------------------------------------------------------
+        # CUSTOMER ANALYTICS
+        # ---------------------------------------------------------
+
+        elif module == "Customer Analytics":
+
+            st.subheader("Customer Analytics")
+
+            df = customer_engine(df, customer_col, date_col, metric)
+
+            beginning = df["Prior_ARR"].sum()
+            ending = df[metric].sum()
+
+            churn = df.loc[df["Bridge"]=="Churn","Bridge_Value"].sum()
+            expansion = df.loc[df["Bridge"]=="Upsell","Bridge_Value"].sum()
+
+            nrr = (beginning + expansion + churn) / beginning if beginning !=0 else 0
+            grr = (beginning + churn) / beginning if beginning !=0 else 0
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            col1.metric("Beginning ARR", round(beginning,2))
+            col2.metric("Ending ARR", round(ending,2))
+            col3.metric("NRR %", round(nrr*100,2))
+            col4.metric("GRR %", round(grr*100,2))
+
+            st.markdown("### Revenue Bridge")
+
+            bridge = df.groupby("Bridge")["Bridge_Value"].sum().reset_index()
+
+            fig = px.bar(
+                bridge,
+                x="Bridge",
+                y="Bridge_Value"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown("### Top Customers")
+
+            top = (
+                df.groupby(customer_col)[metric]
+                .sum()
+                .reset_index()
+                .sort_values(metric,ascending=False)
+                .head(10)
+            )
+
+            fig2 = px.bar(
+                top,
+                x=customer_col,
+                y=metric
+            )
+
+            st.plotly_chart(fig2, use_container_width=True)
+
+            st.session_state.result = df
+
+
+        else:
+
+            st.markdown(
+                """
+                <h1 style='text-align:center;color:#7C3AED;
+                font-size:80px;margin-top:200px;'>
+                Coming Soon 🚀
+                </h1>
+                """,
+                unsafe_allow_html=True
+            )
+
+
+        # ---------------------------------------------------------
+        # DOWNLOAD OUTPUT
+        # ---------------------------------------------------------
+
+        if st.session_state.result is not None:
+
+            csv = st.session_state.result.to_csv(index=False)
+
+            if st.session_state.user_email == ADMIN_EMAIL:
+
+                st.download_button(
+                    "Download Results",
+                    csv,
+                    "analytics_output.csv"
+                )
+
+            else:
+
+                st.download_button(
+                    "Download Results",
+                    csv,
+                    disabled=True
+                )
+
+                st.warning("🔒 Download is available only for subscribed users.")
