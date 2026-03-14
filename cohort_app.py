@@ -103,302 +103,258 @@ if not st.session_state.authenticated:
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    html, body, [class*="css"] { font-family:'Inter',sans-serif; }
+    html, body, [class*="css"] { font-family:'Inter',sans-serif; margin:0; padding:0; }
     #MainMenu{visibility:hidden;} footer{visibility:hidden;} header{visibility:hidden;}
-
-    /* Make entire app background match the split */
-    .stApp { background:#0047AB; }
+    .stApp { background:#0047AB !important; }
     [data-testid="stSidebar"] { display:none !important; }
 
-    /* Remove ALL padding/margin from Streamlit wrapper so our layout fills viewport */
-    .block-container {
-        padding: 0 !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-    }
-    section[data-testid="stMain"] > div {
-        padding: 0 !important;
-    }
+    /* Zero out ALL Streamlit padding */
+    .block-container { padding:0 !important; max-width:100% !important; margin:0 !important; }
+    section[data-testid="stMain"] { padding:0 !important; }
+    section[data-testid="stMain"] > div { padding:0 !important; }
+    div[data-testid="stVerticalBlockBorderWrapper"] { padding:0 !important; }
 
-    /* Force the two columns to be exactly 50/50 and full viewport height */
-    [data-testid="stHorizontalBlock"] {
-        gap: 0 !important;
-        align-items: stretch !important;
-        min-height: 100vh !important;
-    }
-    [data-testid="stHorizontalBlock"] > div:first-child {
-        flex: 0 0 57% !important;
-        max-width: 57% !important;
-        padding: 0 !important;
-        min-height: 100vh !important;
-    }
-    [data-testid="stHorizontalBlock"] > div:last-child {
-        flex: 0 0 43% !important;
-        max-width: 43% !important;
-        padding: 0 !important;
-        min-height: 100vh !important;
-        background: #FFFFFF;
-    }
-    /* Remove inner element padding */
-    [data-testid="stHorizontalBlock"] > div > div {
-        padding: 0 !important;
-        height: 100% !important;
-    }
-
-    /* Input styling */
+    /* Inputs */
     .stTextInput input {
         background:#F8F9FC !important; border:1.5px solid #E2E6EF !important;
         border-radius:8px !important; color:#1A1D23 !important;
         font-size:14px !important; padding:10px 14px !important;
     }
-    .stTextInput input:focus { border-color:#0047AB !important; box-shadow:0 0 0 3px rgba(0,71,171,0.08) !important; }
-    .stTextInput label { color:#5A6478 !important; font-size:12px !important; font-weight:600 !important; letter-spacing:0.02em !important; }
-    /* Sign in button */
+    .stTextInput input:focus { border-color:#0047AB !important; }
+    .stTextInput label { color:#5A6478 !important; font-size:12px !important; font-weight:600 !important; }
+
+    /* Buttons */
     .stButton > button {
-        background:#0047AB !important; color:#FFFFFF !important;
-        border:none !important; border-radius:8px !important;
-        font-weight:600 !important; font-size:14px !important;
-        padding:12px 24px !important; width:100% !important;
-        transition:background 0.15s, box-shadow 0.15s !important;
-        letter-spacing:0.01em !important;
+        background:#0047AB !important; color:#FFFFFF !important; border:none !important;
+        border-radius:8px !important; font-weight:600 !important; font-size:14px !important;
+        padding:11px 24px !important; width:100% !important; transition:background 0.15s !important;
     }
-    .stButton > button:hover { background:#003899 !important; box-shadow:0 4px 14px rgba(0,71,171,0.25) !important; }
-    /* Guest button — secondary style */
-    div[data-testid="column"]:last-child .stButton:last-of-type > button {
-        background:#F8F9FC !important; color:#0047AB !important;
-        border:1.5px solid #BFDBFE !important;
-    }
-    div[data-testid="column"]:last-child .stButton:last-of-type > button:hover {
-        background:#EFF6FF !important; box-shadow:none !important;
-    }
+    .stButton > button:hover { background:#003899 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-    lcol, rcol = st.columns([57, 43], gap="small")
+    # ── Single full-width HTML block: blue left + white right ──────────────
+    st.markdown("""
+    <div style="display:flex;min-height:100vh;width:100%;font-family:'Inter',sans-serif;">
 
-    with lcol:
-        st.markdown("""
-        <div style="min-height:100vh;
-                    background:linear-gradient(150deg,#001F5B 0%,#0047AB 55%,#1565C0 100%);
-                    padding:52px 48px;display:flex;flex-direction:column;">
+      <!-- ── LEFT: Blue hero panel ── -->
+      <div style="flex:0 0 57%;background:linear-gradient(150deg,#001F5B 0%,#0047AB 55%,#1565C0 100%);
+                  padding:48px 48px 40px 48px;display:flex;flex-direction:column;box-sizing:border-box;">
 
-          <!-- Logo -->
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:52px;">
-            <div style="width:34px;height:34px;background:rgba(255,255,255,0.15);
-                        border-radius:7px;display:flex;align-items:center;justify-content:center;
-                        color:white;font-size:16px;font-weight:800;
-                        border:1px solid rgba(255,255,255,0.25);">R</div>
-            <span style="color:white;font-size:15px;font-weight:700;letter-spacing:-0.01em;">
-              Revenue Analytics Engine
-            </span>
-          </div>
-
-          <!-- Badge -->
-          <div style="display:inline-block;background:rgba(255,255,255,0.12);
-                      color:rgba(255,255,255,0.85);font-size:10px;font-weight:700;
-                      letter-spacing:0.1em;text-transform:uppercase;
-                      padding:5px 12px;border-radius:20px;
-                      border:1px solid rgba(255,255,255,0.2);margin-bottom:18px;
-                      width:fit-content;">
-            Revenue Intelligence Platform
-          </div>
-
-          <!-- Headline -->
-          <h1 style="color:#FFFFFF;font-size:40px;font-weight:800;line-height:1.1;
-                     letter-spacing:-0.03em;margin:0 0 16px 0;">
-            Turn revenue data<br>into strategic insight
-          </h1>
-          <p style="color:rgba(255,255,255,0.75);font-size:15px;line-height:1.65;
-                    max-width:430px;margin:0 0 28px 0;">
-            Stop spending weeks in Excel. Upload your billing or revenue data and instantly
-            get cohort analysis, ARR bridge breakdowns, retention metrics, and customer
-            segmentation — all in one place.
-          </p>
-
-          <!-- What we do -->
-          <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
-                      border-radius:12px;padding:18px 20px;margin-bottom:20px;">
-            <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                        letter-spacing:0.09em;text-transform:uppercase;margin-bottom:12px;">
-              What you get instantly
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div style="color:rgba(255,255,255,0.85);font-size:12px;">📊 Cohort segmentation (SG/PC/RC)</div>
-              <div style="color:rgba(255,255,255,0.85);font-size:12px;">📈 ARR / MRR revenue bridge</div>
-              <div style="color:rgba(255,255,255,0.85);font-size:12px;">🔄 NRR, GRR, logo retention</div>
-              <div style="color:rgba(255,255,255,0.85);font-size:12px;">💰 Price vs volume decomposition</div>
-              <div style="color:rgba(255,255,255,0.85);font-size:12px;">🎯 New logo / churn / upsell flags</div>
-              <div style="color:rgba(255,255,255,0.85);font-size:12px;">📋 PE-grade waterfall table</div>
-            </div>
-          </div>
-
-          <!-- Consulting block -->
-          <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
-                      border-radius:12px;padding:18px 20px;margin-bottom:20px;">
-            <div style="display:flex;align-items:flex-start;gap:14px;">
-              <div style="font-size:26px;margin-top:2px;">👨‍💼</div>
-              <div style="flex:1;">
-                <div style="color:#FFFFFF;font-size:13px;font-weight:700;margin-bottom:5px;">
-                  Expert help — no full-time hire
-                </div>
-                <div style="color:rgba(255,255,255,0.65);font-size:12px;line-height:1.55;">
-                  Need someone to interpret your data, build a revenue narrative for investors,
-                  or set up your analytics model? Book <strong style="color:rgba(255,255,255,0.85);">Ashwani</strong>
-                  for a focused 1–2 hour session. Former PE analytics background with deep SaaS
-                  and subscription metrics expertise.
-                </div>
-                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-                  <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
-                               font-size:11px;font-weight:600;padding:4px 12px;
-                               border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
-                    1 hr · $150
-                  </span>
-                  <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
-                               font-size:11px;font-weight:600;padding:4px 12px;
-                               border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
-                    2 hrs · $280
-                  </span>
-                  <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
-                               font-size:11px;font-weight:600;padding:4px 12px;
-                               border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
-                    Half day · $500
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Pricing -->
-          <div>
-            <div style="color:rgba(255,255,255,0.45);font-size:10px;font-weight:700;
-                        letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px;">
-              Simple pricing
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-              <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);
-                          border-radius:10px;padding:14px;">
-                <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                             text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Free</div>
-                <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$0</div>
-                <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:8px;">forever</div>
-                <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.75;">
-                  ✓ Upload &amp; analyse<br>✓ View all dashboards<br>✗ Download results
-                </div>
-              </div>
-              <div style="background:rgba(255,255,255,0.13);
-                          border:1.5px solid rgba(255,255,255,0.3);
-                          border-radius:10px;padding:14px;position:relative;">
-                <div style="position:absolute;top:-9px;left:12px;background:#F59E0B;
-                            color:#1A1D23;font-size:9px;font-weight:700;
-                            padding:2px 8px;border-radius:10px;">POPULAR</div>
-                <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                             text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Premium</div>
-                <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$25</div>
-                <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:8px;">once / year</div>
-                <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.75;">
-                  ✓ Everything free<br>✓ Download results<br>✓ Export reports
-                </div>
-              </div>
-              <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);
-                          border-radius:10px;padding:14px;">
-                <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
-                             text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Usage</div>
-                <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$10</div>
-                <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:8px;">per run</div>
-                <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.75;">
-                  ✓ Each analysis run<br>✓ All engine types<br>✓ Pay as you go
-                </div>
-              </div>
-            </div>
-          </div>
-
+        <!-- Logo -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:44px;">
+          <div style="width:34px;height:34px;background:rgba(255,255,255,0.15);border-radius:7px;
+                      display:flex;align-items:center;justify-content:center;color:white;
+                      font-size:16px;font-weight:800;border:1px solid rgba(255,255,255,0.25);">R</div>
+          <span style="color:white;font-size:15px;font-weight:700;">Revenue Analytics Engine</span>
         </div>
-        """, unsafe_allow_html=True)
 
-    with rcol:
-        st.markdown("""
-        <div style="background:#FFFFFF;min-height:100vh;padding:48px 48px 40px 48px;">
-        """, unsafe_allow_html=True)
+        <!-- Badge -->
+        <div style="display:inline-block;background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.85);
+                    font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+                    padding:5px 12px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);
+                    margin-bottom:16px;width:fit-content;">Revenue Intelligence Platform</div>
 
-        st.markdown("""
-        <div style="margin-bottom:32px;">
+        <!-- Headline -->
+        <h1 style="color:#FFFFFF;font-size:40px;font-weight:800;line-height:1.1;
+                   letter-spacing:-0.03em;margin:0 0 14px 0;">
+          Turn revenue data<br>into strategic insight
+        </h1>
+        <p style="color:rgba(255,255,255,0.75);font-size:14px;line-height:1.65;
+                  max-width:430px;margin:0 0 24px 0;">
+          Stop spending weeks in Excel. Upload your billing or revenue data and instantly
+          get cohort analysis, ARR bridge breakdowns, retention metrics, and customer
+          segmentation — all in one place.
+        </p>
+
+        <!-- What you get -->
+        <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+                    border-radius:12px;padding:16px 18px;margin-bottom:16px;">
+          <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
+                      letter-spacing:0.09em;text-transform:uppercase;margin-bottom:10px;">
+            What you get instantly
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div style="color:rgba(255,255,255,0.85);font-size:12px;">📊 Cohort segmentation (SG/PC/RC)</div>
+            <div style="color:rgba(255,255,255,0.85);font-size:12px;">📈 ARR / MRR revenue bridge</div>
+            <div style="color:rgba(255,255,255,0.85);font-size:12px;">🔄 NRR, GRR, logo retention</div>
+            <div style="color:rgba(255,255,255,0.85);font-size:12px;">💰 Price vs volume decomposition</div>
+            <div style="color:rgba(255,255,255,0.85);font-size:12px;">🎯 New logo / churn / upsell flags</div>
+            <div style="color:rgba(255,255,255,0.85);font-size:12px;">📋 PE-grade waterfall table</div>
+          </div>
+        </div>
+
+        <!-- Consulting -->
+        <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+                    border-radius:12px;padding:16px 18px;margin-bottom:16px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div style="font-size:24px;margin-top:2px;">👨‍💼</div>
+            <div>
+              <div style="color:#FFFFFF;font-size:13px;font-weight:700;margin-bottom:4px;">
+                Expert help — no full-time hire
+              </div>
+              <div style="color:rgba(255,255,255,0.65);font-size:12px;line-height:1.55;">
+                Need someone to interpret your data, build a revenue narrative for investors,
+                or set up your analytics model? Book <strong style="color:rgba(255,255,255,0.85);">Ashwani</strong>
+                for a focused 1–2 hour session. Former PE analytics background with deep SaaS
+                and subscription metrics expertise.
+              </div>
+              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
+                             font-size:11px;font-weight:600;padding:4px 10px;
+                             border-radius:6px;border:1px solid rgba(255,255,255,0.2);">1 hr · $150</span>
+                <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
+                             font-size:11px;font-weight:600;padding:4px 10px;
+                             border-radius:6px;border:1px solid rgba(255,255,255,0.2);">2 hrs · $280</span>
+                <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9);
+                             font-size:11px;font-weight:600;padding:4px 10px;
+                             border-radius:6px;border:1px solid rgba(255,255,255,0.2);">Half day · $500</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing -->
+        <div>
+          <div style="color:rgba(255,255,255,0.45);font-size:10px;font-weight:700;
+                      letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">
+            Simple pricing
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);
+                        border-radius:10px;padding:14px;">
+              <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
+                           text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;">Free</div>
+              <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$0</div>
+              <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:7px;">forever</div>
+              <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7;">
+                ✓ Upload &amp; analyse<br>✓ View all dashboards<br>✗ Download results
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.3);
+                        border-radius:10px;padding:14px;position:relative;">
+              <div style="position:absolute;top:-9px;left:12px;background:#F59E0B;
+                          color:#1A1D23;font-size:9px;font-weight:700;
+                          padding:2px 8px;border-radius:10px;">POPULAR</div>
+              <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
+                           text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;">Premium</div>
+              <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$25</div>
+              <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:7px;">once / year</div>
+              <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7;">
+                ✓ Everything free<br>✓ Download results<br>✓ Export reports
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);
+                        border-radius:10px;padding:14px;">
+              <div style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;
+                           text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;">Usage</div>
+              <div style="color:#FFFFFF;font-size:20px;font-weight:800;">$10</div>
+              <div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:7px;">per run</div>
+              <div style="color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7;">
+                ✓ Each analysis run<br>✓ All engine types<br>✓ Pay as you go
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── RIGHT: White login panel ── -->
+      <div style="flex:0 0 43%;background:#FFFFFF;padding:48px 48px 40px 48px;
+                  display:flex;flex-direction:column;box-sizing:border-box;">
+
+        <div style="margin-bottom:28px;">
           <div style="font-size:24px;font-weight:800;color:#1A1D23;
                       letter-spacing:-0.02em;margin-bottom:6px;">Welcome back</div>
           <div style="font-size:13px;color:#8C95A6;line-height:1.55;">
             Sign in to access the platform, or use the guest demo to explore without an account.
           </div>
         </div>
-        """, unsafe_allow_html=True)
 
-        login_email    = st.text_input("Email address", placeholder="you@company.com", key="li_email")
-        login_password = st.text_input("Password", type="password", placeholder="••••••••", key="li_pass")
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        if st.button("Sign in →", key="btn_signin"):
-            name_ok  = (login_email.strip().lower() == ADMIN_NAME and
-                        login_password.strip() == ADMIN_PASSWORD)
-            email_ok = (login_email.strip().lower() == ADMIN_EMAIL.lower() and
-                        login_password.strip() == ADMIN_PASSWORD)
-            free_ok  = ("@" in login_email and len(login_password) >= 1)
+    # ── Streamlit form elements overlaid inside the right panel ───────────
+    # We use a container that overlaps the right side visually
+    # by using negative margin trick + fixed position of form elements
+    # The cleanest way: render form BELOW the HTML block,
+    # but CSS the whole page so the form appears in the right spot.
+    st.markdown("""
+    <style>
+    /* Pull the form elements up into the right panel area */
+    .login-form-area {
+        position: relative;
+        background: #FFFFFF;
+        margin-top: -220px;   /* pull up into the white panel */
+        margin-left: 57%;
+        padding: 0 48px 40px 48px;
+        box-sizing: border-box;
+        min-height: 220px;
+        z-index: 10;
+    }
+    </style>
+    <div class="login-form-area">
+    """, unsafe_allow_html=True)
 
-            if name_ok or email_ok:
-                st.session_state.authenticated = True
-                st.session_state.user_email    = ADMIN_EMAIL
-                st.rerun()
-            elif free_ok:
-                st.session_state.authenticated = True
-                st.session_state.user_email    = login_email.strip()
-                st.rerun()
-            else:
-                st.error("Please enter a valid email address and password to continue.")
+    login_email    = st.text_input("Email address", placeholder="you@company.com", key="li_email")
+    login_password = st.text_input("Password", type="password", placeholder="••••••••", key="li_pass")
 
-        st.markdown("""
-        <div style="display:flex;align-items:center;gap:12px;margin:16px 0;">
-          <div style="flex:1;height:1px;background:#E5E8EF;"></div>
-          <span style="font-size:11px;color:#8C95A6;">or</span>
-          <div style="flex:1;height:1px;background:#E5E8EF;"></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("Try free demo (no signup needed)", key="btn_guest"):
+    if st.button("Sign in →", key="btn_signin"):
+        name_ok  = (login_email.strip().lower() == ADMIN_NAME and login_password.strip() == ADMIN_PASSWORD)
+        email_ok = (login_email.strip().lower() == ADMIN_EMAIL.lower() and login_password.strip() == ADMIN_PASSWORD)
+        free_ok  = ("@" in login_email and len(login_password) >= 1)
+        if name_ok or email_ok:
             st.session_state.authenticated = True
-            st.session_state.user_email    = "guest@demo.com"
+            st.session_state.user_email    = ADMIN_EMAIL
             st.rerun()
+        elif free_ok:
+            st.session_state.authenticated = True
+            st.session_state.user_email    = login_email.strip()
+            st.rerun()
+        else:
+            st.error("Please enter a valid email address and password.")
 
-        st.markdown("""
-        <div style="margin-top:28px;padding:18px;background:#F8F9FC;
-                    border-radius:10px;border:1px solid #E5E8EF;">
-          <div style="font-size:12px;font-weight:700;color:#1A1D23;margin-bottom:8px;">
-            🔒 How access works
-          </div>
-          <div style="font-size:12px;color:#5A6478;line-height:1.65;">
-            <strong>Free users</strong> — sign in with any email, explore all dashboards
-            and charts. Download is locked until you subscribe.<br><br>
-            <strong>Premium ($25/yr)</strong> — unlocks CSV/Excel download and report export.<br><br>
-            <strong>$10 per run</strong> — after your first subscription, each analytics run
-            is billed at $10. Pay only for what you use.
-          </div>
-        </div>
+    st.markdown("""
+    <div style="display:flex;align-items:center;gap:12px;margin:14px 0;">
+      <div style="flex:1;height:1px;background:#E5E8EF;"></div>
+      <span style="font-size:11px;color:#8C95A6;">or</span>
+      <div style="flex:1;height:1px;background:#E5E8EF;"></div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        <div style="margin-top:20px;padding:16px;background:#EFF6FF;
-                    border-radius:10px;border:1px solid #BFDBFE;">
-          <div style="font-size:12px;font-weight:700;color:#1E40AF;margin-bottom:6px;">
-            📞 Book a consulting session
-          </div>
-          <div style="font-size:12px;color:#3B5998;line-height:1.55;">
-            Ashwani is available for 1-on-1 analytics sessions — interpret your data,
-            build investor narratives, or get your cohort model set up correctly.
-            <br><strong>No retainer. Book by the hour.</strong>
-          </div>
-        </div>
+    if st.button("Try free demo (no signup needed)", key="btn_guest"):
+        st.session_state.authenticated = True
+        st.session_state.user_email    = "guest@demo.com"
+        st.rerun()
 
-        <div style="margin-top:20px;font-size:11px;color:#8C95A6;line-height:1.55;">
-          By continuing you agree to our Terms of Service and Privacy Policy.
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="margin-top:20px;padding:16px;background:#F8F9FC;border-radius:10px;border:1px solid #E5E8EF;">
+      <div style="font-size:12px;font-weight:700;color:#1A1D23;margin-bottom:7px;">🔒 How access works</div>
+      <div style="font-size:12px;color:#5A6478;line-height:1.6;">
+        <strong>Free users</strong> — sign in with any email, explore all dashboards and charts.
+        Download is locked until you subscribe.<br><br>
+        <strong>Premium ($25/yr)</strong> — unlocks CSV/Excel download and report export.<br><br>
+        <strong>$10 per run</strong> — after your first subscription, each analytics run is billed at $10.
+        Pay only for what you use.
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:14px;background:#EFF6FF;border-radius:10px;border:1px solid #BFDBFE;">
+      <div style="font-size:12px;font-weight:700;color:#1E40AF;margin-bottom:5px;">📞 Book a consulting session</div>
+      <div style="font-size:12px;color:#3B5998;line-height:1.55;">
+        Ashwani is available for 1-on-1 analytics sessions — interpret your data,
+        build investor narratives, or get your cohort model set up correctly.
+        <br><strong>No retainer. Book by the hour.</strong>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-size:11px;color:#8C95A6;">
+      By continuing you agree to our Terms of Service and Privacy Policy.
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.stop()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # APP CSS (light professional theme)
@@ -1427,18 +1383,22 @@ with right:
                 if m_out["channel_col"] != "None":   keep_cols_map[m_out["channel_col"]] = "Channel"
                 if m_out["region_col"]  != "None":   keep_cols_map[m_out["region_col"]]  = "Region"
 
-                # Columns that come from the engine with consistent names
+                # Columns from the engine — map source name → display name
+                # Note: engine produces "Lookback Date" (with space), not "Lookback_Date"
                 engine_cols = {
-                    "Vintage":       "Vintage",
-                    m_out["date_col"]: "Date",
-                    m_out["metric"]:  "MRR or ARR",
+                    "Vintage":              "Vintage",
+                    m_out["date_col"]:      "Date",
+                    m_out["metric"]:        "MRR or ARR",
+                    "Lookback":             "Month Lookback",
+                    "DTE":                  "DTE",
+                    "Lookback Date":        "Lookback Date",
+                    "Bridge Classification":"Bridge Classification",
+                    "Bridge Value":         "Bridge Value",
+                    "Beginning MRR or ARR": "Beginning MRR or ARR",
+                    "Ending MRR or ARR":    "Ending MRR or ARR",
                 }
-                if m_out["qty_col"] != "None": engine_cols[m_out["qty_col"]] = "Quantity"
-                engine_cols["Lookback"]       = "Month Lookback"
-                engine_cols["DTE"]            = "DTE"
-                engine_cols["Lookback_Date"]  = "Lookback Date"
-                engine_cols["Bridge"]         = "Bridge Classification"
-                engine_cols["Bridge_Value"]   = "Bridge Value"
+                if m_out["qty_col"] != "None":
+                    engine_cols[m_out["qty_col"]] = "Quantity"
 
                 all_map = {**keep_cols_map, **engine_cols}
 
@@ -1446,33 +1406,43 @@ with right:
                 # Beginning MRR or ARR and Ending MRR or ARR appear ONLY as rows
                 # in Bridge Classification column, not as separate columns.
 
-                avail = {k: v for k, v in all_map.items() if k in master.columns}
+                avail     = {k: v for k, v in all_map.items() if k in master.columns}
                 src = master.copy()
                 if sel_year != "All":
                     src = src[src[m_out["date_col"]].dt.year == int(sel_year)]
 
+                # ── Dim cols available in master ───────────────────────
+                dim_avail = {k: v for k, v in all_map.items() if k in src.columns}
+                dim_keys  = list(dim_avail.keys())
+
                 # ── Movement rows (New Logo, Upsell, Churn etc.) ─────────
-                move_df = src[list(avail.keys())].copy().rename(columns=avail)
+                move_df = src[dim_keys].copy().rename(columns=dim_avail).reset_index(drop=True)
                 move_df = move_df[move_df["Bridge Classification"] != "No Change"]
                 move_df = move_df[~move_df["Bridge Classification"].isin(
                     ["Beginning MRR or ARR", "Ending MRR or ARR"])]
 
-                # ── Beginning MRR or ARR rows ────────────────────────────
-                # One row per customer/product/date/lookback where Beginning_ARR > 0
-                # Bridge Classification = "Beginning MRR or ARR"
-                # Bridge Value = Beginning_ARR value
-                beg_src = src[src["Beginning_ARR"] > 0].copy()
-                beg_df  = beg_src[list(avail.keys())].copy().rename(columns=avail)
-                beg_df["Bridge Classification"] = "Beginning MRR or ARR"
-                beg_df["Bridge Value"]          = beg_src["Beginning_ARR"].values
+                # ── Beginning MRR or ARR rows ─────────────────────────────
+                # Each row where Beginning_ARR > 0 gets a "Beginning MRR or ARR" bridge row.
+                # Bridge Value = the Beginning ARR amount for that row.
+                beg_src = src[src["Beginning_ARR"] > 0].copy().reset_index(drop=True)
+                if not beg_src.empty:
+                    beg_df = beg_src[dim_keys].copy().rename(columns=dim_avail).reset_index(drop=True)
+                    beg_df["Bridge Classification"] = "Beginning MRR or ARR"
+                    beg_df["Bridge Value"]          = beg_src["Beginning_ARR"].values
+                else:
+                    beg_df = pd.DataFrame(columns=move_df.columns)
 
-                # ── Ending MRR or ARR rows ───────────────────────────────
-                end_src = src[src["Ending_ARR"] > 0].copy()
-                end_df  = end_src[list(avail.keys())].copy().rename(columns=avail)
-                end_df["Bridge Classification"] = "Ending MRR or ARR"
-                end_df["Bridge Value"]          = end_src["Ending_ARR"].values
+                # ── Ending MRR or ARR rows ──────────────────────────────
+                # Each row where Ending_ARR > 0 gets an "Ending MRR or ARR" bridge row.
+                end_src = src[src["Ending_ARR"] > 0].copy().reset_index(drop=True)
+                if not end_src.empty:
+                    end_df = end_src[dim_keys].copy().rename(columns=dim_avail).reset_index(drop=True)
+                    end_df["Bridge Classification"] = "Ending MRR or ARR"
+                    end_df["Bridge Value"]          = end_src["Ending_ARR"].values
+                else:
+                    end_df = pd.DataFrame(columns=move_df.columns)
 
-                # ── Align and concatenate ────────────────────────────────
+                # ── Align all three frames to same columns ────────────────
                 final_cols = list(move_df.columns)
                 for df_part in [beg_df, end_df]:
                     for c in final_cols:
@@ -1508,19 +1478,8 @@ with right:
                   not as separate columns.
                 </div>""", unsafe_allow_html=True)
 
-                # Style rows by Bridge Classification
-                def style_output_row(row):
-                    bc = row.get("Bridge Classification", "")
-                    if bc in ("Beginning MRR or ARR", "Ending MRR or ARR"):
-                        return ["background-color:#EFF6FF;font-weight:700;color:#1E3A5F"] * len(row)
-                    if bc in ("New Logo", "Cross Sell", "Other In", "Returning", "Upsell"):
-                        return ["background-color:#F0FDF4;color:#15803D"] * len(row)
-                    if bc in ("Churn", "Partial Churn", "Downsell", "Lapsed"):
-                        return ["background-color:#FEF2F2;color:#B91C1C"] * len(row)
-                    return [""] * len(row)
-
-                styled_out = out_df.style.apply(style_output_row, axis=1)
-                st.dataframe(styled_out, use_container_width=True, height=460)
+                # Plain st.dataframe — no Styler (avoids StreamlitAPIException in newer versions)
+                st.dataframe(out_df, use_container_width=True, height=460)
 
                 csv_out = out_df.to_csv(index=False)
                 if is_admin:
