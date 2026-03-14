@@ -317,7 +317,7 @@ if not st.session_state.authenticated:
 
     with rcol:
         st.markdown("""
-        <div style="background:#FFFFFF;min-height:100vh;padding:56px 48px 40px 48px;">
+        <div style="background:#FFFFFF;min-height:100vh;padding:48px 48px 40px 48px;">
         """, unsafe_allow_html=True)
 
         st.markdown("""
@@ -919,32 +919,65 @@ with right:
                 with c3: st.markdown(f'<div class="metric-card"><div class="metric-label">Revenue / Customer</div><div class="metric-value">{fmt_currency(rpc)}</div></div>', unsafe_allow_html=True)
                 st.markdown("")
 
-                if fiscal_col != "None":
+                if fiscal_col != "None" and customer_col != "None":
                     fy = df_used.groupby(fiscal_col).agg(Revenue=(metric,"sum"), Customers=(customer_col,"nunique")).reset_index()
                     fy["Rev_per_Cust"] = fy["Revenue"]/fy["Customers"]
+
+                    # Summary table by fiscal year
+                    st.markdown('<div class="section-hdr">Summary by Fiscal Year</div>', unsafe_allow_html=True)
+                    fy_display = fy.copy()
+                    fy_display["Revenue"]       = fy_display["Revenue"].apply(fmt_currency)
+                    fy_display["Rev_per_Cust"]  = fy_display["Rev_per_Cust"].apply(fmt_currency)
+                    fy_display.columns = [fiscal_col, "Revenue", "Unique Customers", "Rev per Customer"]
+                    st.dataframe(fy_display, use_container_width=True, hide_index=True)
+
+                    # Revenue combo chart
+                    fy_raw = df_used.groupby(fiscal_col).agg(Revenue=(metric,"sum"), Customers=(customer_col,"nunique")).reset_index()
+                    fy_raw["Rev_per_Cust"] = fy_raw["Revenue"]/fy_raw["Customers"]
                     fig_fy = go.Figure()
-                    fig_fy.add_bar(x=fy[fiscal_col], y=fy["Revenue"], name="Revenue", marker_color=BRAND_BLUE, opacity=0.8)
-                    fig_fy.add_scatter(x=fy[fiscal_col], y=fy["Revenue"], mode="lines+markers", name="Trend", line=dict(color="#E8611A",width=2), marker=dict(size=5,color="#E8611A"))
+                    fig_fy.add_bar(x=fy_raw[fiscal_col], y=fy_raw["Revenue"], name="Revenue", marker_color=BRAND_BLUE, opacity=0.8)
+                    fig_fy.add_scatter(x=fy_raw[fiscal_col], y=fy_raw["Revenue"], mode="lines+markers", name="Trend",
+                                       line=dict(color="#E8611A",width=2), marker=dict(size=5,color="#E8611A"))
                     ly = base_layout("Revenue by Fiscal Year"); ly["xaxis"]=LIGHT_AXIS; ly["yaxis"]=LIGHT_AXIS
                     fig_fy.update_layout(**ly); st.plotly_chart(fig_fy, use_container_width=True)
+
                     c1,c2 = st.columns(2)
                     with c1:
-                        fig2 = px.bar(fy, x=fiscal_col, y="Customers", color_discrete_sequence=["#00897B"])
-                        ly2  = base_layout("Customers by Fiscal Year"); ly2["xaxis"]=LIGHT_AXIS; ly2["yaxis"]=LIGHT_AXIS
+                        fig2 = px.bar(fy_raw, x=fiscal_col, y="Customers", color_discrete_sequence=["#00897B"])
+                        ly2  = base_layout("Unique Customers by Fiscal Year"); ly2["xaxis"]=LIGHT_AXIS; ly2["yaxis"]=LIGHT_AXIS
                         fig2.update_layout(**ly2); st.plotly_chart(fig2, use_container_width=True)
                     with c2:
-                        fig3 = px.bar(fy, x=fiscal_col, y="Rev_per_Cust", color_discrete_sequence=["#F4A900"])
-                        ly3  = base_layout("Revenue per Customer"); ly3["xaxis"]=LIGHT_AXIS; ly3["yaxis"]=LIGHT_AXIS
+                        fig3 = px.bar(fy_raw, x=fiscal_col, y="Rev_per_Cust", color_discrete_sequence=["#F4A900"])
+                        ly3  = base_layout("Revenue per Customer by Fiscal Year"); ly3["xaxis"]=LIGHT_AXIS; ly3["yaxis"]=LIGHT_AXIS
                         fig3.update_layout(**ly3); st.plotly_chart(fig3, use_container_width=True)
 
-                if customer_col != "None":
+                    # Segmentation by fiscal year (stacked bar)
+                    st.markdown('<div class="section-hdr">Customer Segmentation by Fiscal Year</div>', unsafe_allow_html=True)
+                    seg_fy = df_used.copy()
+                    # Rank customers within each fiscal year
+                    seg_fy["FY_Rank"] = seg_fy.groupby(fiscal_col)[metric].rank(method="dense", ascending=False)
+                    seg_fy["FY_Max"]  = seg_fy.groupby(fiscal_col)[metric].transform("count")
+                    seg_fy["Pct"]     = seg_fy["FY_Rank"] / seg_fy["FY_Max"]
+                    seg_fy["Segment"] = pd.cut(seg_fy["Pct"], bins=[0,.05,.1,.2,1],
+                                               labels=["Top 5%","Top 10%","Top 20%","Long Tail"])
+                    seg_agg = seg_fy.groupby([fiscal_col,"Segment"])[metric].sum().reset_index()
+                    fig_seg = px.bar(seg_agg, x=fiscal_col, y=metric, color="Segment",
+                                     barmode="stack",
+                                     color_discrete_map={"Top 5%":BRAND_BLUE,"Top 10%":"#E8611A",
+                                                         "Top 20%":"#00897B","Long Tail":"#CBD5E1"})
+                    ly_seg = base_layout("Revenue by Segment × Fiscal Year"); ly_seg["xaxis"]=LIGHT_AXIS; ly_seg["yaxis"]=LIGHT_AXIS
+                    fig_seg.update_layout(**ly_seg); st.plotly_chart(fig_seg, use_container_width=True)
+
+                elif fiscal_col == "None" and customer_col != "None":
+                    # No fiscal col — overall segmentation only
                     seg = df_used.groupby(customer_col)[metric].sum().reset_index()
-                    seg["Rank"] = seg[metric].rank(method="dense", ascending=False)
-                    seg["Pct"]  = seg["Rank"]/seg["Rank"].max()
+                    seg["Rank"]    = seg[metric].rank(method="dense", ascending=False)
+                    seg["Pct"]     = seg["Rank"]/seg["Rank"].max()
                     seg["Segment"] = pd.cut(seg["Pct"],bins=[0,.05,.1,.2,1],labels=["Top 5%","Top 10%","Top 20%","Long Tail"])
                     pie = seg.groupby("Segment")[metric].sum().reset_index()
-                    fig4 = px.pie(pie, names="Segment", values=metric, color_discrete_sequence=[BRAND_BLUE,"#E8611A","#00897B","#CBD5E1"])
-                    ly4  = base_layout("Customer Segmentation"); fig4.update_layout(**ly4)
+                    fig4 = px.pie(pie, names="Segment", values=metric,
+                                  color_discrete_sequence=[BRAND_BLUE,"#E8611A","#00897B","#CBD5E1"])
+                    ly4 = base_layout("Customer Segmentation"); fig4.update_layout(**ly4)
                     st.plotly_chart(fig4, use_container_width=True)
 
             with tab2:
@@ -957,12 +990,24 @@ with right:
                         hdf["CohortMonth"] = hdf[customer_col].map(cmap)
                         hdf["CohortIndex"] = (pd.to_datetime(hdf["OrderMonth"])-pd.to_datetime(hdf["CohortMonth"])).dt.days//30
                         pivot = pd.pivot_table(hdf, values=customer_col, index="CohortMonth", columns="CohortIndex", aggfunc="nunique").fillna(0)
-                        fig_h = px.imshow(pivot, text_auto=True, color_continuous_scale="Blues", aspect="auto")
-                        ly_h  = base_layout("Cohort Heatmap — Customer Count", height=420); ly_h["xaxis"]=dict(**LIGHT_AXIS,title="Month Index"); ly_h["yaxis"]=dict(**LIGHT_AXIS,title="Cohort Month")
+                        # Replace zeros with NaN so cells show blank (colour only, no zero clutter)
+                        pivot_display = pivot.replace(0, np.nan)
+                        fig_h = px.imshow(pivot_display, text_auto=False, color_continuous_scale="Blues", aspect="auto")
+                        fig_h.update_traces(text=None)
+                        ly_h  = base_layout("Cohort Heatmap — Customer Count", height=420)
+                        ly_h["xaxis"] = dict(**LIGHT_AXIS, title="Month Index")
+                        ly_h["yaxis"] = dict(**LIGHT_AXIS, title="Cohort Month")
                         fig_h.update_layout(**ly_h); st.plotly_chart(fig_h, use_container_width=True)
-                        ret   = pivot.divide(pivot.iloc[:,0], axis=0)*100
-                        fig_r = px.imshow(ret, text_auto=".0f", color_continuous_scale="RdYlGn", aspect="auto")
-                        ly_r  = base_layout("Retention % by Cohort", height=420); ly_r["xaxis"]=dict(**LIGHT_AXIS,title="Month Index"); ly_r["yaxis"]=dict(**LIGHT_AXIS,title="Cohort Month")
+
+                        # Retention % — zeros become NaN (blank), colour only
+                        ret = pivot.divide(pivot.iloc[:,0], axis=0)*100
+                        ret_display = ret.replace(0, np.nan)
+                        fig_r = px.imshow(ret_display, text_auto=False, color_continuous_scale="RdYlGn",
+                                          zmin=0, zmax=100, aspect="auto")
+                        fig_r.update_traces(text=None)
+                        ly_r  = base_layout("Retention % by Cohort", height=420)
+                        ly_r["xaxis"] = dict(**LIGHT_AXIS, title="Month Index")
+                        ly_r["yaxis"] = dict(**LIGHT_AXIS, title="Cohort Month")
                         fig_r.update_layout(**ly_r); st.plotly_chart(fig_r, use_container_width=True)
                     except Exception as e:
                         st.warning(f"Cohort heatmap error: {e}")
@@ -1221,53 +1266,85 @@ with right:
 
                 all_map = {**keep_cols_map, **engine_cols}
 
-                # Filter to columns that actually exist in master
+                # ── Build output: dim cols + engine cols (NO separate Beg/End cols) ──
+                # Beginning MRR or ARR and Ending MRR or ARR appear ONLY as rows
+                # in Bridge Classification column, not as separate columns.
+
                 avail = {k: v for k, v in all_map.items() if k in master.columns}
-                out_df = master[list(avail.keys())].copy()
-                out_df = out_df.rename(columns=avail)
-
-                # Apply year filter
+                src = master.copy()
                 if sel_year != "All":
-                    out_df = out_df[pd.to_datetime(out_df["Date"]).dt.year == int(sel_year)]
+                    src = src[src[m_out["date_col"]].dt.year == int(sel_year)]
 
-                # Remove "No Change" rows for cleaner output
-                if "Bridge Classification" in out_df.columns:
-                    out_df = out_df[out_df["Bridge Classification"] != "No Change"]
+                # ── Movement rows (New Logo, Upsell, Churn etc.) ─────────
+                move_df = src[list(avail.keys())].copy().rename(columns=avail)
+                move_df = move_df[move_df["Bridge Classification"] != "No Change"]
+                move_df = move_df[~move_df["Bridge Classification"].isin(
+                    ["Beginning MRR or ARR", "Ending MRR or ARR"])]
 
-                # Sort: Customer → Date → Month Lookback
-                sort_cols = [c for c in ["Customer","Date","Month Lookback"] if c in out_df.columns]
-                if sort_cols: out_df = out_df.sort_values(sort_cols)
+                # ── Beginning MRR or ARR rows ────────────────────────────
+                # One row per customer/product/date/lookback where Beginning_ARR > 0
+                # Bridge Classification = "Beginning MRR or ARR"
+                # Bridge Value = Beginning_ARR value
+                beg_src = src[src["Beginning_ARR"] > 0].copy()
+                beg_df  = beg_src[list(avail.keys())].copy().rename(columns=avail)
+                beg_df["Bridge Classification"] = "Beginning MRR or ARR"
+                beg_df["Bridge Value"]          = beg_src["Beginning_ARR"].values
+
+                # ── Ending MRR or ARR rows ───────────────────────────────
+                end_src = src[src["Ending_ARR"] > 0].copy()
+                end_df  = end_src[list(avail.keys())].copy().rename(columns=avail)
+                end_df["Bridge Classification"] = "Ending MRR or ARR"
+                end_df["Bridge Value"]          = end_src["Ending_ARR"].values
+
+                # ── Align and concatenate ────────────────────────────────
+                final_cols = list(move_df.columns)
+                for df_part in [beg_df, end_df]:
+                    for c in final_cols:
+                        if c not in df_part.columns:
+                            df_part[c] = None
+
+                out_df = pd.concat(
+                    [beg_df[final_cols], move_df[final_cols], end_df[final_cols]],
+                    ignore_index=True
+                )
+
+                # Sort: Customer → Date → Month Lookback → bridge order
+                bridge_sort_order = {
+                    "Beginning MRR or ARR": 0,
+                    "New Logo": 1, "Cross Sell": 2, "Other In": 3, "Returning": 4,
+                    "Upsell": 5, "Downsell": 6, "Churn": 7, "Partial Churn": 8,
+                    "Lapsed": 9, "Ending MRR or ARR": 10,
+                }
+                out_df["_sort"] = out_df["Bridge Classification"].map(bridge_sort_order).fillna(5)
+                sort_cols = [c for c in ["Customer","Date","Month Lookback","_sort"] if c in out_df.columns]
+                if sort_cols:
+                    out_df = out_df.sort_values(sort_cols).drop(columns=["_sort"])
 
                 total_rows = len(out_df)
                 st.markdown(
-                    f'<div class="section-hdr">{total_rows:,} rows · {out_df["Bridge Classification"].nunique() if "Bridge Classification" in out_df.columns else 0} bridge categories · Lookback {sel_lb}M{" · " + sel_year if sel_year != "All" else ""}</div>',
+                    f'<div class="section-hdr">{total_rows:,} rows · Lookback {sel_lb}M{" · " + sel_year if sel_year != "All" else ""} · Beginning & Ending ARR as bridge rows</div>',
                     unsafe_allow_html=True)
 
                 st.markdown("""
                 <div style="font-size:12px;color:#5A6478;margin-bottom:10px;line-height:1.5;">
-                  Output schema matches Alteryx final Select tool output:
-                  <strong>Customer · Product · Channel · Region · Vintage · Date · MRR or ARR ·
-                  Quantity · Month Lookback · DTE · Lookback Date · Bridge Classification · Bridge Value</strong>
+                  Schema matches Alteryx output — <strong>Beginning MRR or ARR</strong> and
+                  <strong>Ending MRR or ARR</strong> appear as rows in Bridge Classification,
+                  not as separate columns.
                 </div>""", unsafe_allow_html=True)
 
-                # Colour-code by Bridge Classification
-                def colour_bridge(val):
-                    colours = {
-                        "New Logo":      "color:#15803D;font-weight:600",
-                        "Cross Sell":    "color:#1D4ED8;font-weight:600",
-                        "Other In":      "color:#16A34A",
-                        "Returning":     "color:#B45309;font-weight:600",
-                        "Upsell":        "color:#2563EB",
-                        "Downsell":      "color:#EA580C;font-weight:600",
-                        "Churn":         "color:#DC2626;font-weight:700",
-                        "Partial Churn": "color:#EF4444",
-                        "Lapsed":        "color:#6B7280",
-                        "Beginning MRR or ARR": "color:#1E3A5F;font-weight:700",
-                        "Ending MRR or ARR":    "color:#1E3A5F;font-weight:700",
-                    }
-                    return colours.get(val, "")
+                # Style rows by Bridge Classification
+                def style_output_row(row):
+                    bc = row.get("Bridge Classification", "")
+                    if bc in ("Beginning MRR or ARR", "Ending MRR or ARR"):
+                        return ["background-color:#EFF6FF;font-weight:700;color:#1E3A5F"] * len(row)
+                    if bc in ("New Logo", "Cross Sell", "Other In", "Returning", "Upsell"):
+                        return ["background-color:#F0FDF4;color:#15803D"] * len(row)
+                    if bc in ("Churn", "Partial Churn", "Downsell", "Lapsed"):
+                        return ["background-color:#FEF2F2;color:#B91C1C"] * len(row)
+                    return [""] * len(row)
 
-                st.dataframe(out_df, use_container_width=True, height=460)
+                styled_out = out_df.style.apply(style_output_row, axis=1)
+                st.dataframe(styled_out, use_container_width=True, height=460)
 
                 csv_out = out_df.to_csv(index=False)
                 if is_admin:
